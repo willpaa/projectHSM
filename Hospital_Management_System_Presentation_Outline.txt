@@ -1,0 +1,139 @@
+HOSPITAL MANAGEMENT SYSTEM
+	Internship Project Presentation
+	Oda Bultum University
+	Presented by: [Your Full Name]
+	Student ID: [Your Student ID]
+	Department: [Your Department]
+	Academic Supervisor: [Name]
+	Hosting Organization Supervisor: [Name]
+	Internship period: [Start Date - End Date]
+
+PROJECT OVERVIEW
+	A web-based hospital management system developed during my internship at Oda Bultum University.
+	The system centralizes patient registration, clinical workflows, laboratory and radiology services, pharmacy, inventory, payments, reports, and user access control.
+	The main goal is to reduce manual work, improve information flow, and support accurate hospital operations.
+
+PROBLEM STATEMENT
+	Hospital information is often distributed across paper files and disconnected processes.
+	Patients may be registered repeatedly or lose time moving between departments.
+	Clinical departments may not receive requests and payment status at the right time.
+	Manual billing and inventory records increase errors and reduce accountability.
+	Management needs timely reports for operational decisions.
+
+PROJECT OBJECTIVES
+	Develop a centralized system for hospital information management.
+	Improve patient registration, triage, OPD, and IPD workflows.
+	Connect laboratory and radiology requests to cashier payment verification.
+	Support pharmacy sales, prescriptions, inventory, and stock transactions.
+	Provide role-based access for administrators and hospital staff.
+	Generate receipts and operational reports.
+	Preserve medical history and protect important patient records.
+
+SCOPE OF THE SYSTEM
+	Patient management: registration, profile, status, contact and medical details.
+	Patient flow: triage, OPD encounters, IPD admission, transfer and discharge.
+	Clinical services: laboratory requests, results, radiology exams and reports.
+	Finance: service requests, cashier queue, payments, insurance share and receipts.
+	Pharmacy: prescriptions, sales, stock, inventory transactions and reporting.
+	Administration: users, staff, doctors, nurses, departments, services and settings.
+	Patient portal: patient access to personal information and selected services.
+
+SYSTEM WORKFLOW
+	1. Patient is registered and sent to triage.
+	2. Triage sends the patient to OPD or another care pathway.
+	3. OPD may send the patient to IPD when admission is required.
+	4. Doctor or department requests laboratory or radiology service.
+	5. Laboratory or radiology staff review the request and send it to cashier.
+	6. Cashier collects or verifies payment and the department is notified.
+	7. Specialist performs the service and records the result.
+	8. Doctor and authorized staff access the completed clinical information.
+
+KEY DESIGN DECISION: DEPARTMENT-TO-CASHIER FLOW
+	OPD and IPD create the clinical queue item only.
+	Laboratorist or radiologist selects the correct billable service.
+	Only the specialist queue creates the service request for cashier.
+	Cashier receives a clear patient share and payment request.
+	After payment is cleared, the department can process the test or examination.
+	This prevents duplicate payment requests and keeps clinical and financial responsibility clear.
+
+TECHNOLOGIES USED
+	Backend: PHP 8.2 and Laravel 12.
+	Admin interface: Filament 5.
+	Database: MySQL with migrations and foreign-key relationships.
+	Frontend assets: Blade templates, Vite, Tailwind CSS and JavaScript.
+	Authentication and authorization: Laravel authentication and Filament Shield / Spatie permissions.
+	Reporting: Laravel views, CSV export and PDF receipt/report generation.
+	Development tools: Composer, NPM, Artisan, Pest and Laravel Pint.
+
+SYSTEM ARCHITECTURE
+	Presentation layer: Filament resources, tables, forms, actions and dashboards.
+	Application layer: Laravel pages, controllers, services, events and notifications.
+	Domain layer: Patient, OPD, IPD, Laboratory, Radiology, Pharmacy, Payment and Inventory models.
+	Data layer: MySQL tables, migrations, relationships, indexes and foreign-key rules.
+	The architecture separates interface, workflow logic and persistent hospital data.
+
+MAJOR MODULES IMPLEMENTED
+	Patient and triage module.
+	OPD and IPD encounter management.
+	Laboratory queue and result management.
+	Radiology queue, image upload and report management.
+	Cashier queue, payment collection, insurance approval and receipts.
+	Pharmacy sales, prescriptions and inventory movement tracking.
+	User, role, staff, doctor, nurse and department management.
+	Dashboard, finance report, pharmacy report and patient portal.
+
+SECURITY AND DATA INTEGRITY
+	Role-based permissions limit users to their responsibilities.
+	Patients cannot be hard-deleted when medical records reference them.
+	Important relationships use foreign keys to protect data consistency.
+	Payment and clinical status control whether a service can proceed.
+	Sensitive pages and receipt routes require authentication.
+	Validation is applied to forms before data is stored.
+
+RESULTS AND BENEFITS
+	A centralized workflow reduces dependence on paper records.
+	Departments can see queues and patient information more consistently.
+	Cashier receives structured requests with patient and insurance amounts.
+	Payment verification controls laboratory and radiology processing.
+	Receipts and reports improve financial traceability.
+	Inventory and pharmacy records support stock accountability.
+	The system provides a foundation for future hospital digital transformation.
+
+CHALLENGES AND SOLUTIONS
+	Challenge: different departments need different workflows.
+	Solution: Filament resources and role-specific actions.
+	Challenge: payment requests could be duplicated.
+	Solution: create cashier requests only from laboratory and radiology queues.
+	Challenge: deleting patients can break medical history.
+	Solution: preserve records and use inactive or deceased status instead.
+	Challenge: status values must match database rules.
+	Solution: align workflow states with migration enum definitions.
+	Challenge: many modules share patient data.
+	Solution: Eloquent relationships, migrations and indexed foreign keys.
+
+TESTING AND VALIDATION
+	PHP syntax validation was used on modified workflow files.
+	Editor diagnostics were checked after changes.
+	Database constraints were reviewed for patient and encounter integrity.
+	Workflow checks covered OPD-to-IPD transfer and specialist-to-cashier routing.
+	Further testing should include a configured test database, role-based feature tests and end-to-end browser tests.
+
+CONCLUSION
+	The project demonstrates how a hospital can coordinate patient care, clinical services and finance in one system.
+	The implemented workflows connect registration, triage, OPD, IPD, laboratory, radiology, pharmacy and cashier operations.
+	The solution improves traceability, reduces duplicate work and protects historical patient data.
+	The internship strengthened my skills in Laravel, databases, role-based access, workflow design, debugging and software engineering practice.
+
+FUTURE ENHANCEMENTS
+	Add automated appointment reminders and SMS notifications.
+	Add more detailed audit logs for sensitive actions.
+	Improve offline or low-connectivity support.
+	Add dashboards with real-time operational indicators.
+	Expand automated feature and browser test coverage.
+	Integrate external insurance and laboratory systems where appropriate.
+	Deploy with monitoring, backups and a documented recovery plan.
+
+THANK YOU
+	Thank you to Oda Bultum University, the hosting organization, my academic supervisor and my hosting supervisor.
+	Questions and discussion
+	Contact: [Your Email or Phone]

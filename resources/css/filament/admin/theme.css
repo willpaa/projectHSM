@@ -1,0 +1,72 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+/* Login page background image */
+.fi-simple-auth-page {
+    background-image: url('/images/login-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* Hide scrollbars */
+.fi-body {
+    overflow: hidden;
+}
+
+::-webkit-scrollbar {
+    display: none;
+}
+
+
+
+/* Dashboard cards and actions feel responsive without shifting the layout. */
+.fi-page .fi-wi-stats-overview-stat {
+    border-radius: 1.1rem;
+    box-shadow: 0 12px 28px rgb(15 23 42 / 10%);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease;
+}
+
+.fi-page .fi-wi-stats-overview-stat:hover {
+    filter: saturate(1.08);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 38px rgb(15 23 42 / 18%);
+}
+
+.fi-page .fi-btn {
+    border-radius: 0.8rem;
+    font-weight: 600;
+    transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.fi-page .fi-btn:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgb(15 23 42 / 14%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fi-page .fi-wi-stats-overview-stat,
+    .fi-page .fi-btn {
+        transition: none;
+    }
+
+    .fi-page .fi-wi-stats-overview-stat:hover,
+    .fi-page .fi-btn:hover {
+        transform: none;
+    }
+}
+
+.fi-page .fi-wi-stats-overview-stat[style*="linear-gradient"] {
+    color: #fff !important;
+}
+
+.fi-page .fi-wi-stats-overview-stat[style*="linear-gradient"] .fi-wi-stats-overview-stat-label,
+.fi-page .fi-wi-stats-overview-stat[style*="linear-gradient"] .fi-wi-stats-overview-stat-value,
+.fi-page .fi-wi-stats-overview-stat[style*="linear-gradient"] .fi-wi-stats-overview-stat-description,
+.fi-page .fi-wi-stats-overview-stat[style*="linear-gradient"] svg {
+    color: #fff !important;
+}
