@@ -7,6 +7,7 @@ use App\Models\Inventory;
 use App\Models\Pharmacy;
 use App\Models\Prescription;
 use App\Models\User;
+use App\Support\PatientPortal;
 use App\Services\InventoryService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -14,6 +15,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
@@ -78,25 +80,40 @@ class PrescriptionsTable
                     ->icon('heroicon-o-building-storefront')
                     ->color('warning')
                     ->requiresConfirmation()
-                    ->visible(fn (Prescription $record): bool => $record->status === 'active')
+                    ->visible(fn (Prescription $record): bool => ! PatientPortal::isPatientUser() && $record->status === 'active')
                     ->form([
                         Select::make('prescribed_medicine')
                             ->label('Prescribed Medicine')
-                            ->options(fn (Prescription $record): array => collect($record->medications ?? [])
-                                ->mapWithKeys(fn ($instructions, $name): array => [(string) $name => (string) $name])
+                            ->options(fn (Prescription $record): array => collect($record->medicationNames())
+                                ->mapWithKeys(fn (string $name): array => [$name => $name])
                                 ->all())
-                            ->required(),
+                            ->searchable()
+                            ->required()
+                            ->helperText('Which medicine from this prescription are you dispensing?'),
                         Select::make('inventory_item_id')
                             ->label('Medicine From Inventory')
-                            ->options(Inventory::query()->orderBy('item_name')->pluck('item_name', 'item_id')->toArray())
+                            ->options(fn (): array => Inventory::query()->orderBy('item_name')
+                                ->get()
+                                ->mapWithKeys(fn (Inventory $item): array => [
+                                    $item->item_id => sprintf('%s (%s in stock)', $item->item_name, InventoryService::availableQuantity($item)),
+                                ])
+                                ->all())
                             ->searchable()
-                            ->required(),
+                            ->preload()
+                            ->required()
+                            ->helperText('Match the prescribed medicine to a stocked inventory item.'),
                         TextInput::make('quantity')
-                            ->label('Quantity to Send')
+                            ->label('Quantity to Dispense')
                             ->numeric()
                             ->minValue(1)
                             ->default(1)
-                            ->required(),
+                            ->required()
+                            ->helperText('How many units to hand to the patient.'),
+                        Textarea::make('pharmacy_note')
+                            ->label('Note to Pharmacist')
+                            ->rows(2)
+                            ->placeholder('Optional note for the pharmacy team.')
+                            ->maxLength(500),
                     ])
                     ->action(function (Prescription $record, array $data): void {
                         $alreadyQueued = Pharmacy::query()
@@ -139,6 +156,20 @@ class PrescriptionsTable
 
                         $availableQuantity = InventoryService::availableQuantity($inventoryItem);
 
+                        // Build the dosage instructions for the selected medicine from
+                        // the prescription's normalised medication rows.
+                        $selectedRow = collect($record->medicationRows())
+                            ->firstWhere('drug', $data['prescribed_medicine'] ?? '');
+
+                        $dosageInstructions = $selectedRow
+                            ? trim(implode(' — ', array_filter([
+                                $selectedRow['dosage'] ?? null,
+                                $selectedRow['frequency'] ?? null,
+                                $selectedRow['duration'] ?? null,
+                                $selectedRow['instructions'] ?? null,
+                            ])))
+                            : null;
+
                         Pharmacy::create([
                             'medicine_id' => 0,
                             'inventory_item_id' => $inventoryItem->item_id,
@@ -147,7 +178,7 @@ class PrescriptionsTable
                             'stock_qty' => $qtyToDispense,
                             'queue_status' => $availableQuantity >= $qtyToDispense ? 'pending' : 'backordered',
                             'prescribed_medicine' => $data['prescribed_medicine'],
-                            'dosage_instructions' => $record->medications[$data['prescribed_medicine']] ?? null,
+                            'dosage_instructions' => $dosageInstructions ?: ($data['pharmacy_note'] ?? null),
                             'unit_price' => $inventoryItem->selling_price,
                             'supplier_id' => $inventoryItem->supplier_id,
                             'reorder_level' => $inventoryItem->reorder_level,

@@ -112,14 +112,40 @@
 </div>
 
 <div class="section">
-    <h3>Medications</h3>
+    <h3>Medications (Rx)</h3>
     @php
-        $medications = $prescription->medications;
-        if (is_array($medications)) {
-            $medications = json_encode($medications, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        }
+        $medicationRows = $prescription->medicationRows();
     @endphp
-    <div class="pre">{{ $medications ?: '-' }}</div>
+    @if (count($medicationRows))
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:auto;">#</th>
+                    <th style="width:auto;">Drug / Medicine</th>
+                    <th style="width:auto;">Dosage</th>
+                    <th style="width:auto;">Frequency</th>
+                    <th style="width:auto;">Duration</th>
+                    <th style="width:auto;">Quantity</th>
+                    <th style="width:auto;">Instructions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($medicationRows as $i => $row)
+                    <tr>
+                        <td>{{ $i + 1 }}</td>
+                        <td><strong>{{ $row['drug'] }}</strong></td>
+                        <td>{{ $row['dosage'] ?? '-' }}</td>
+                        <td>{{ $row['frequency'] ?? '-' }}</td>
+                        <td>{{ $row['duration'] ?? '-' }}</td>
+                        <td>{{ $row['quantity'] ?? '-' }}</td>
+                        <td>{{ $row['instructions'] ?? '-' }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @else
+        <div class="pre">{{ is_array($prescription->medications) ? json_encode($prescription->medications, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : ($prescription->medications ?: '-') }}</div>
+    @endif
 </div>
 
 <div class="section">
