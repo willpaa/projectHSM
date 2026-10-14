@@ -2,11 +2,12 @@
 
 namespace App\Filament\Resources\OPDS\Tables;
 
+use App\Filament\Resources\IPDS\IPDResource;
 use App\Filament\Support\TableFilters;
+use App\Support\PatientPortal;
 use App\Models\IPD;
 use App\Models\Laboratory;
 use App\Models\OPD;
-use App\Models\PatientHistory;
 use App\Models\User;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -20,8 +21,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Auth;
 use App\Models\Doctors;
+use App\Models\Service;
+use App\Models\Staff;
 use Filament\Forms\Components\Select;
 use App\Models\Radiology;
 class OPDSTable
@@ -122,7 +124,7 @@ class OPDSTable
                     ->label('Send to IPD')
                     ->icon('heroicon-o-arrow-right-circle')
                     ->color('warning')
-                    ->visible(fn (OPD $record): bool => $record->status === 'open')
+                    ->visible(fn (OPD $record): bool => ! PatientPortal::isPatientUser() && $record->status === 'open')
                     ->form([
                         Select::make('doctor_id')
                             ->label('Doctor')
@@ -173,24 +175,99 @@ class OPDSTable
                                 ->icon('heroicon-o-bell-alert')
                                 ->sendToDatabase($ipdUsers);
                         }
+
+                        // Notify the doctor assigned to this IPD encounter so the
+                        // patient appears in their account with a link to the record.
+                        $assignedDoctor = Doctors::query()->with('user')->find($data['doctor_id']);
+                        if ($assignedDoctor?->user) {
+                            Notification::make()
+                                ->title('New IPD Patient Assigned')
+                                ->body("Patient {$record->patient?->full_name} has been admitted and assigned to you in IPD.")
+                                ->icon('heroicon-o-user-plus')
+                                ->actions([
+                                    \Filament\Actions\Action::make('view')
+                                        ->label('View Patient')
+                                        ->url(IPDResource::getUrl('index')),
+                                ])
+                                ->sendToDatabase($assignedDoctor->user);
+                        }
                     }),
                 Action::make('call_patient')
                     ->label('Call')
                     ->icon('heroicon-o-phone')
                     ->color('success')
                     ->url(fn (OPD $record): ?string => filled($record->patient?->phone) ? 'tel:' . $record->patient->phone : null)
-                    ->visible(fn (OPD $record): bool => filled($record->patient?->phone)),
+                    ->visible(fn (OPD $record): bool => ! PatientPortal::isPatientUser() && filled($record->patient?->phone)),
                 Action::make('send_to_lab')
                     ->label('Send to Lab')
                     ->icon('heroicon-o-beaker')
                     ->color('warning')
-                    ->visible(fn (OPD $record): bool => filled($record->patient_id) && filled($record->doctor_id))
+                    ->visible(fn (OPD $record): bool => ! PatientPortal::isPatientUser() && filled($record->patient_id) && filled($record->doctor_id))
                     ->form([
+                        Select::make('service_id')
+                            ->label('Lab Service / Type')
+                            ->options(fn (): array => Service::query()
+                                ->where('service_type', 'lab')
+                                ->where('is_active', true)
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all())
+                            ->searchable()
+                            ->preload()
+                            ->live()
+                            ->afterStateUpdated(function ($state, callable $set): void {
+                                $service = $state ? Service::find($state) : null;
+
+                                if ($service) {
+                                    $set('test_name', $service->name);
+                                    $set('cost', (float) $service->price);
+                                }
+                            })
+                            ->required()
+                            ->helperText('Choose the type of lab service the doctor is requesting.'),
                         Textarea::make('test_name')
                             ->label('Test / Panel')
-                            ->default('Initial OPD Lab Panel')
                             ->required()
-                            ->rows(2),
+                            ->rows(2)
+                            ->helperText('Specific test or panel name for this request.'),
+                        Select::make('test_type')
+                            ->label('Test Category')
+                            ->options([
+                                'Hematology' => 'Hematology',
+                                'Biochemistry' => 'Biochemistry',
+                                'Microbiology' => 'Microbiology',
+                                'Serology' => 'Serology',
+                                'Immunology' => 'Immunology',
+                                'Pathology' => 'Pathology',
+                                'Endocrinology' => 'Endocrinology',
+                                'General' => 'General',
+                            ])
+                            ->default('General')
+                            ->required(),
+                        Select::make('sample_type')
+                            ->label('Sample Type')
+                            ->options([
+                                'Blood' => 'Blood',
+                                'Urine' => 'Urine',
+                                'Stool' => 'Stool',
+                                'Sputum' => 'Sputum',
+                                'Swab' => 'Swab',
+                                'Tissue' => 'Tissue',
+                                'Other' => 'Other',
+                            ])
+                            ->default('Blood')
+                            ->required(),
+                        Select::make('laboratorist_id')
+                            ->label('Laboratorist (Lab Technician)')
+                            ->options(fn (): array => Staff::query()
+                                ->where('role', 'lab_technician')
+                                ->where('status', 'active')
+                                ->orderBy('full_name')
+                                ->pluck('full_name', 'id')
+                                ->all())
+                            ->searchable()
+                            ->preload()
+                            ->placeholder('Assign a laboratorist (optional)'),
                     ])
                     ->action(function (OPD $record, array $data): void {
                         $pendingLabExists = Laboratory::query()
@@ -211,25 +288,35 @@ class OPDSTable
                         
 
                         $labId = 'LAB-' . now()->format('Ymd') . '-' . Str::upper(Str::random(5));
+                        $service = ! empty($data['service_id']) ? Service::find($data['service_id']) : null;
+                        $assignedLaboratorist = ! empty($data['laboratorist_id']) ? Staff::find($data['laboratorist_id']) : null;
+
                         Laboratory::create([
                             'lab_id' => $labId,
                             'patient_id' => $record->patient_id,
                             'doctor_id' => $record->doctor_id,
+                            'laboratorist_id' => $data['laboratorist_id'] ?? null,
                             'encounter_type' => 'OPD',
                             'encounter_id' => $record->encounter_id,
                             'test_name' => $data['test_name'],
-                            'test_type' => 'General',
-                            'sample_type' => 'Blood',
+                            'test_type' => $data['test_type'] ?? 'General',
+                            'sample_type' => $data['sample_type'] ?? 'Blood',
                             'test_date' => now()->toDateString(),
                             'result_status' => 'pending',
                             'status' => 'ordered',
+                            'cost' => $service?->price ?? 0,
                         ]);
 
                         $labUsers = User::usersByRoleName('lab_technician');
                         if ($labUsers->isNotEmpty()) {
+                            $body = "OPD patient {$record->patient?->full_name} sent to Lab.";
+                            if ($assignedLaboratorist) {
+                                $body .= " Assigned laboratorist: {$assignedLaboratorist->full_name}.";
+                            }
+
                             Notification::make()
                                 ->title('New Laboratory Queue')
-                                ->body("OPD patient {$record->patient?->full_name} sent to Lab.")
+                                ->body($body)
                                 ->icon('heroicon-o-bell-alert')
                                 ->sendToDatabase($labUsers);
                         }
@@ -244,7 +331,7 @@ class OPDSTable
                     ->label('Discharge')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn (OPD $record): bool => $record->status === 'open')
+                    ->visible(fn (OPD $record): bool => ! PatientPortal::isPatientUser() && $record->status === 'open')
                     ->form([
                         Textarea::make('discharge_summary')
                             ->label('Discharge Summary')
@@ -261,18 +348,6 @@ class OPDSTable
                             'follow_up_date' => $data['follow_up_date'] ?? null,
                         ]);
 
-                        if (filled($record->patient_id)) {
-                            PatientHistory::create([
-                                'patient_id' => $record->patient_id,
-                                'encounter_id' => $record->encounter_id,
-                                'source' => 'opd',
-                                'activity' => 'OPD discharged',
-                                'details' => $data['discharge_summary'],
-                                'occurred_at' => now(),
-                                'created_by' => Auth::id(),
-                            ]);
-                        }
-
                         Notification::make()
                             ->title('Patient discharged from OPD.')
                             ->success()
@@ -283,7 +358,7 @@ class OPDSTable
                     ->label('Send to Radiology')
                     ->icon('heroicon-o-photo')
                     ->color('gray')
-                    ->visible(fn (OPD $record): bool => $record->status === 'open')
+                    ->visible(fn (OPD $record): bool => ! PatientPortal::isPatientUser() && $record->status === 'open')
                     ->form([
                         Select::make('doctor_id')
                             ->label('Doctor')

@@ -9,6 +9,7 @@ use App\Filament\Resources\OPDS\Schemas\OPDForm;
 use App\Filament\Resources\OPDS\Schemas\OPDInfolist;
 use App\Filament\Resources\OPDS\Tables\OPDSTable;
 use App\Models\OPD;
+use App\Support\ClinicalReportAccess;
 use App\Support\PatientPortal;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -50,10 +51,20 @@ class OPDResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with(['patient', 'doctor']);
 
         if (PatientPortal::isPatientUser()) {
-            return $query->where('patient_id', PatientPortal::currentPatientId());
+            $patientId = PatientPortal::currentPatientId();
+
+            return $patientId ? $query->where('patient_id', $patientId) : $query->whereRaw('1 = 0');
+        }
+
+        // A logged-in doctor only sees the OPD encounters assigned to them.
+        if (auth()->user()?->hasRole('doctor')
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            $doctorId = ClinicalReportAccess::currentDoctorId();
+
+            return $doctorId ? $query->where('doctor_id', $doctorId) : $query->whereRaw('1 = 0');
         }
 
         return $query;
@@ -66,12 +77,31 @@ class OPDResource extends Resource
 
     public static function canEdit($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        if (PatientPortal::isPatientUser()) {
+            return false;
+        }
+
+        // A doctor may only edit the OPD encounters assigned to them.
+        if (auth()->user()?->hasRole('doctor')
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            return $record instanceof OPD && ClinicalReportAccess::canViewReport($record);
+        }
+
+        return true;
     }
 
     public static function canDelete($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        if (PatientPortal::isPatientUser()) {
+            return false;
+        }
+
+        if (auth()->user()?->hasRole('doctor')
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            return $record instanceof OPD && ClinicalReportAccess::canViewReport($record);
+        }
+
+        return true;
     }
 
     public static function getPages(): array

@@ -10,6 +10,7 @@ use App\Filament\Resources\IPDS\Schemas\IPDForm;
 use App\Filament\Resources\IPDS\Schemas\IPDInfolist;
 use App\Filament\Resources\IPDS\Tables\IPDSTable;
 use App\Models\IPD;
+use App\Support\ClinicalReportAccess;
 use App\Support\PatientPortal;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -51,10 +52,20 @@ class IPDResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with(['patient', 'doctor']);
 
         if (PatientPortal::isPatientUser()) {
-            return $query->where('patient_id', PatientPortal::currentPatientId());
+            $patientId = PatientPortal::currentPatientId();
+
+            return $patientId ? $query->where('patient_id', $patientId) : $query->whereRaw('1 = 0');
+        }
+
+        // A logged-in doctor only sees the IPD encounters assigned to them.
+        if (auth()->user()?->hasRole('doctor')
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            $doctorId = ClinicalReportAccess::currentDoctorId();
+
+            return $doctorId ? $query->where('doctor_id', $doctorId) : $query->whereRaw('1 = 0');
         }
 
         return $query;
@@ -67,12 +78,30 @@ class IPDResource extends Resource
 
     public static function canEdit($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        if (PatientPortal::isPatientUser()) {
+            return false;
+        }
+
+        // A doctor may only edit the IPD encounters assigned to them.
+        if (auth()->user()?->hasRole('doctor')
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            return $record instanceof IPD && ClinicalReportAccess::canViewReport($record);
+        }
+
+        return true;
     }
 
-    public static function canDelete($record): bool
+    public static function canDelete(mixed $record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return $record instanceof IPD
+            && ! PatientPortal::isPatientUser()
+            && ClinicalReportAccess::canViewReport($record);
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return ! PatientPortal::isPatientUser()
+            && ClinicalReportAccess::isDoctorUser();
     }
 
     public static function getPages(): array

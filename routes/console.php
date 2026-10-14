@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -49,6 +50,10 @@ Artisan::command('receptionist:setup {--user_id=} {--user_email=}', function () 
         'Update:Prescription',
     ];
 
+    foreach ($permissions as $permission) {
+        Permission::findOrCreate($permission, 'web');
+    }
+
     $role = Role::firstOrCreate([
         'name' => 'receptionist',
         'guard_name' => 'web',
@@ -86,6 +91,10 @@ Artisan::command('workflow:setup-roles', function () {
     $rolesPermissions = [
         'triage_nurse' => [
             'View:Dashboard',
+            'ViewAny:Appointments',
+            'View:Appointments',
+            'Create:Appointments',
+            'Update:Appointments',
             'ViewAny:Triage',
             'View:Triage',
             'Create:Triage',
@@ -99,6 +108,10 @@ Artisan::command('workflow:setup-roles', function () {
         ],
         'opd_staff' => [
             'View:Dashboard',
+            'ViewAny:Appointments',
+            'View:Appointments',
+            'Create:Appointments',
+            'Update:Appointments',
             'ViewAny:OPD',
             'View:OPD',
             'Update:OPD',
@@ -134,9 +147,16 @@ Artisan::command('workflow:setup-roles', function () {
         ],
         'doctor' => [
             'View:Dashboard',
+            'ViewAny:Appointments',
+            'View:Appointments',
+            'Create:Appointments',
+            'Update:Appointments',
             'ViewAny:OPD',
             'View:OPD',
             'Update:OPD',
+            'ViewAny:IPD',
+            'View:IPD',
+            'Update:IPD',
             'ViewAny:Laboratory',
             'View:Laboratory',
             'ViewAny:Radiology',
@@ -162,6 +182,10 @@ Artisan::command('workflow:setup-roles', function () {
         ],
     ];
 
+    foreach (collect($rolesPermissions)->flatten()->unique() as $permission) {
+        Permission::findOrCreate($permission, 'web');
+    }
+
     foreach ($rolesPermissions as $roleName => $permissions) {
         $role = Role::firstOrCreate([
             'name' => $roleName,
@@ -170,6 +194,21 @@ Artisan::command('workflow:setup-roles', function () {
 
         $role->syncPermissions($permissions);
         $this->info("Role '{$roleName}' configured with {$role->permissions()->count()} permissions.");
+    }
+
+    $appointmentPermissions = [
+        'ViewAny:Appointments',
+        'View:Appointments',
+        'Create:Appointments',
+        'Update:Appointments',
+    ];
+
+    foreach (['nurse', 'ipd_staff'] as $roleName) {
+        $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
+
+        if ($role) {
+            $role->givePermissionTo($appointmentPermissions);
+        }
     }
 
     app(PermissionRegistrar::class)->forgetCachedPermissions();

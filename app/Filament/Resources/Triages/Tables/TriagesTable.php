@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Triages\Tables;
 
+use App\Filament\Resources\OPDS\OPDResource;
 use App\Filament\Support\TableFilters;
 use App\Models\Doctors;
 use App\Models\Laboratory;
@@ -134,6 +135,22 @@ class TriagesTable
                                 ->body("Triage patient {$record->patient?->full_name} sent to OPD.")
                                 ->icon('heroicon-o-bell-alert')
                                 ->sendToDatabase($opdUsers);
+                        }
+
+                        // Notify the doctor assigned to this encounter so the patient
+                        // appears in their account with a direct link to the OPD record.
+                        $assignedDoctor = Doctors::query()->with('user')->find($data['doctor_id']);
+                        if ($assignedDoctor?->user) {
+                            Notification::make()
+                                ->title('New OPD Patient Assigned')
+                                ->body("Patient {$record->patient?->full_name} has been assigned to you in OPD.")
+                                ->icon('heroicon-o-user-plus')
+                                ->actions([
+                                    \Filament\Actions\Action::make('view')
+                                        ->label('View Patient')
+                                        ->url(OPDResource::getUrl('index')),
+                                ])
+                                ->sendToDatabase($assignedDoctor->user);
                         }
 
                         Notification::make()

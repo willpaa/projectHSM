@@ -10,6 +10,7 @@ use App\Filament\Resources\Prescriptions\Schemas\PrescriptionForm;
 use App\Filament\Resources\Prescriptions\Schemas\PrescriptionInfolist;
 use App\Filament\Resources\Prescriptions\Tables\PrescriptionsTable;
 use App\Models\Prescription;
+use App\Support\ClinicalReportAccess;
 use App\Support\PatientPortal;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -53,10 +54,20 @@ class PrescriptionResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with(['patient', 'doctor']);
 
         if (PatientPortal::isPatientUser()) {
-            return $query->where('patient_id', PatientPortal::currentPatientId());
+            $patientId = PatientPortal::currentPatientId();
+
+            return $patientId ? $query->where('patient_id', $patientId) : $query->whereRaw('1 = 0');
+        }
+
+        // A logged-in doctor only sees the prescriptions they wrote.
+        if (auth()->user()?->hasRole('doctor')
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            $doctorId = ClinicalReportAccess::currentDoctorId();
+
+            return $doctorId ? $query->where('doctor_id', $doctorId) : $query->whereRaw('1 = 0');
         }
 
         return $query;
@@ -64,8 +75,7 @@ class PrescriptionResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return ! PatientPortal::isPatientUser()
-            || (bool) auth()->user()?->can('ViewAny:Prescription');
+        return (bool) auth()->user()?->can('ViewAny:Prescription');
     }
 
     public static function canCreate(): bool
@@ -75,12 +85,32 @@ class PrescriptionResource extends Resource
 
     public static function canEdit($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        if (PatientPortal::isPatientUser()) {
+            return false;
+        }
+
+        // A doctor may only edit the prescriptions they wrote.
+        if (auth()->user()?->hasRole('doctor')
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            return $record instanceof Prescription && ClinicalReportAccess::canViewReport($record);
+        }
+
+        return true;
     }
 
     public static function canDelete($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        if (PatientPortal::isPatientUser()) {
+            return false;
+        }
+
+        // A doctor may only delete the prescriptions they wrote.
+        if (auth()->user()?->hasRole('doctor')
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            return $record instanceof Prescription && ClinicalReportAccess::canViewReport($record);
+        }
+
+        return true;
     }
 
     public static function getPages(): array
