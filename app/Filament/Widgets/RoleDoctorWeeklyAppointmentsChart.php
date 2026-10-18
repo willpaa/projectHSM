@@ -23,22 +23,22 @@ class RoleDoctorWeeklyAppointmentsChart extends ChartWidget
         $start = Carbon::today()->subDays(6);
         $end = Carbon::today();
 
-        $query = Appointments::query()
-            ->selectRaw('DATE(`date`) as appt_day, COUNT(*) as total')
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+        $appointments = Appointments::query()
+            ->selectRaw('`date` as appt_day, COUNT(*) as total')
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()]);
+
+        if (auth()->user()?->hasRole('doctor')) {
+            if ($doctorIds !== []) {
+                $appointments->whereIn('doctor_id', $doctorIds);
+            } else {
+                $appointments->whereRaw('1 = 0');
+            }
+        }
+
+        $query = $appointments
             ->groupBy('appt_day')
             ->pluck('total', 'appt_day')
             ->toArray();
-
-        if ($doctorIds !== []) {
-            $query = Appointments::query()
-                ->selectRaw('DATE(`date`) as appt_day, COUNT(*) as total')
-                ->whereIn('doctor_id', $doctorIds)
-                ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-                ->groupBy('appt_day')
-                ->pluck('total', 'appt_day')
-                ->toArray();
-        }
 
         $labels = [];
         $data = [];

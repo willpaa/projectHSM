@@ -6,6 +6,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
 class DoctorsForm
 {
@@ -17,6 +18,16 @@ class DoctorsForm
                     ->required(),
                 TextInput::make('full_name')
                     ->required(),
+                Select::make('user_id')
+                    ->label('Doctor Login Account')
+                    ->relationship(
+                        'user',
+                        'name',
+                        modifyQueryUsing: fn (Builder $query): Builder => $query->role('doctor'),
+                    )
+                    ->searchable()
+                    ->preload()
+                    ->helperText('Link this doctor profile to the login account that should receive clinical result notifications.'),
                 TextInput::make('specialization')
                     ->default(null),
                 TextInput::make('license_no')
@@ -29,7 +40,11 @@ class DoctorsForm
                     ->email()
                     ->default(null),
                     Select::make('department_id')
-                    ->relationship('department', 'name')
+                    ->label('Department')
+                    ->options(fn (): array => \App\Models\Department::query()
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all())
                     ->searchable()
                     ->preload()
                     ->required(),
@@ -58,7 +73,7 @@ class DoctorsForm
 
                         return ['notes' => trim($state)];
                     })
-                    ->helperText('Enter plain text or valid JSON. Plain text will be saved safely.')
+                    ->helperText('For appointment hours, use JSON such as {"monday":[{"start":"09:00","end":"12:00"},{"start":"13:00","end":"17:00"}]}. Leave blank or use plain text when no recurring hours are configured.')
                     ->default(null)
                     ->columnSpanFull(),
                 TextInput::make('consultation_fee')

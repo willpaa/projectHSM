@@ -11,6 +11,7 @@ use App\Filament\Resources\Laboratories\Schemas\LaboratoryInfolist;
 use App\Filament\Resources\Laboratories\Tables\LaboratoriesTable;
 use App\Models\Laboratory;
 use App\Support\ClinicalReportAccess;
+use App\Support\ClinicalStaffAccess;
 use App\Support\PatientPortal;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -20,6 +21,7 @@ use Illuminate\Database\Eloquent\Builder;
 class LaboratoryResource extends Resource
 {
     protected static ?string $model = Laboratory::class;
+
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-beaker';
 
@@ -52,7 +54,36 @@ class LaboratoryResource extends Resource
 
     public static function canViewAny(): bool
     {
+        if (ClinicalStaffAccess::isLabStaff()) {
+            return ClinicalStaffAccess::canManageLaboratory();
+        }
+
+        if (ClinicalStaffAccess::isRadiologyStaff()) {
+            return false;
+        }
+
         return ! ClinicalReportAccess::isDoctorUser();
+    }
+
+    public static function canView($record): bool
+    {
+        if (PatientPortal::isPatientUser()) {
+            return (int) $record->patient_id === (int) PatientPortal::currentPatientId();
+        }
+
+        if (ClinicalReportAccess::isDoctorUser()) {
+            return ClinicalReportAccess::canViewReport($record);
+        }
+
+        if (ClinicalStaffAccess::isLabStaff()) {
+            return ClinicalStaffAccess::canManageLaboratory($record);
+        }
+
+        if (ClinicalStaffAccess::isRadiologyStaff()) {
+            return false;
+        }
+
+        return (bool) auth()->user()?->can('View:Laboratory');
     }
 
     public static function getEloquentQuery(): Builder
@@ -67,22 +98,30 @@ class LaboratoryResource extends Resource
             return $query->where('doctor_id', ClinicalReportAccess::currentDoctorId());
         }
 
+        if (ClinicalStaffAccess::isLabStaff()) {
+            return $query->where('laboratorist_id', ClinicalStaffAccess::currentLaboratoristId() ?? 0);
+        }
+
+        if (ClinicalStaffAccess::isRadiologyStaff()) {
+            return $query->whereRaw('1 = 0');
+        }
+
         return $query;
     }
 
     public static function canCreate(): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return ! PatientPortal::isPatientUser() && ! ClinicalStaffAccess::isClinicalStaff();
     }
 
     public static function canEdit($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return ! PatientPortal::isPatientUser() && ! ClinicalStaffAccess::isClinicalStaff();
     }
 
     public static function canDelete($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return ! PatientPortal::isPatientUser() && ! ClinicalStaffAccess::isClinicalStaff();
     }
 
     public static function getPages(): array

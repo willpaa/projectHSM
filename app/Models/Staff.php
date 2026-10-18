@@ -8,8 +8,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Staff extends Model
 {
+    protected static function booted(): void
+    {
+        static::saving(function (self $staff): void {
+            if (! in_array($staff->role, ['lab_technician', 'radiology_technician'], true)) {
+                $staff->user_id = null;
+            }
+        });
+    }
+
     protected $fillable = [
         'staff_id',
+        'user_id',
         'full_name',
         'role',
         'department',
@@ -27,6 +37,11 @@ class Staff extends Model
         'salary' => 'decimal:2',
     ];
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
     public function createdAppointments(): HasMany
     {
         return $this->hasMany(Appointments::class, 'created_by', 'staff_id');
@@ -40,6 +55,16 @@ class Staff extends Model
     public function generatedReports(): HasMany
     {
         return $this->hasMany(Reports::class, 'generated_by', 'staff_id');
+    }
+
+    public function laboratoryRequests(): HasMany
+    {
+        return $this->hasMany(Laboratory::class, 'laboratorist_id');
+    }
+
+    public function radiologyRequests(): HasMany
+    {
+        return $this->hasMany(Radiology::class, 'radiologist_id');
     }
 
     public function department(): BelongsTo

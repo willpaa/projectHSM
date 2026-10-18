@@ -5,6 +5,7 @@ use App\Http\Controllers\PharmacyReportExportController;
 use App\Http\Controllers\PharmacyReportPrintController;
 use App\Http\Controllers\UserPrintController;
 use App\Http\Controllers\PaymentReceiptController;
+use App\Http\Controllers\FinanceReportExportController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -22,6 +23,12 @@ Route::middleware(['auth'])->get('/admin/pharmacy-reports/export/csv', [Pharmacy
 
 Route::middleware(['auth'])->get('/admin/pharmacy-reports/print', PharmacyReportPrintController::class)
     ->name('pharmacy-reports.print');
+
+Route::middleware(['auth'])->prefix('/admin/finance-reports')->name('finance-reports.')->controller(FinanceReportExportController::class)->group(function () {
+    Route::get('/export/csv', 'csv')->name('export.csv');
+    Route::get('/export/excel', 'excel')->name('export.excel');
+    Route::get('/export/pdf', 'pdf')->name('export.pdf');
+});
 Route::middleware(['auth'])->group(function () {
     
     // ========== RECEIPT ROUTES ==========
@@ -50,5 +57,3 @@ Route::middleware(['auth'])->group(function () {
             ->name('api.receipt.download');
     });
 });
-
-

@@ -37,6 +37,11 @@ class Doctors extends Model
         return $this->belongsTo(Department::class, 'department_id');
     }
 
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointments::class, 'doctor_id');
+    }
+
     public function opdEncounters(): HasMany
     {
         return $this->hasMany(OPD::class, 'doctor_id');

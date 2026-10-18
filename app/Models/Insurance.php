@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\ScopesPatientRecords;
 
 class Insurance extends Model
 {
+    use ScopesPatientRecords;
     protected $fillable = [
         'policy_id',
         'patient_id',

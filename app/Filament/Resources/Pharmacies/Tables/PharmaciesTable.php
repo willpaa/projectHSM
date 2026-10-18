@@ -54,6 +54,13 @@ class PharmaciesTable
                     ->label('Dispense')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
+                    ->fillForm(fn (Pharmacy $record): array => [
+                        'quantity' => (int) $record->stock_qty,
+                        'payment_status' => 'paid',
+                        'patient_id' => $record->issued_to_patient_id === null
+                            ? ''
+                            : (string) $record->issued_to_patient_id,
+                    ])
                     ->visible(fn (Pharmacy $record): bool => $record->stock_qty > 0
                         && $record->queue_status !== 'dispensed'
                         && $record->inventoryItem !== null
@@ -63,7 +70,6 @@ class PharmaciesTable
                             ->label('Quantity to Dispense')
                             ->numeric()
                             ->minValue(1)
-                            ->default(fn (Pharmacy $record): int => $record->stock_qty)
                             ->helperText(fn (Pharmacy $record): string => 'Unexpired stock available: ' . ($record->inventoryItem
                                 ? InventoryService::availableQuantity($record->inventoryItem)
                                 : 0))
@@ -71,7 +77,6 @@ class PharmaciesTable
                         Select::make('payment_status')
                             ->label('Payment')
                             ->options(['paid' => 'Paid', 'pending' => 'Pending'])
-                            ->default('paid')
                             ->required(),
                         TextInput::make('patient_id')
                             ->label('Patient ID or Code')

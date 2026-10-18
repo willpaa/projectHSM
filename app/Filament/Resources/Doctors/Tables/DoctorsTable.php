@@ -33,7 +33,8 @@ class DoctorsTable
                 TextColumn::make('email')
                     ->label('Email address')
                     ->searchable(),
-                TextColumn::make('department')
+                TextColumn::make('department.name')
+                    ->label('Department')
                     ->searchable(),
                 TextColumn::make('consultation_fee')
                     ->numeric()

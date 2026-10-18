@@ -8,9 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Events\PaymentRequested;
 use App\Events\PaymentVerified;
 use App\Support\ServiceRequestNotifier;
+use App\Models\Concerns\ScopesPatientRecords;
 
 class ServiceRequest extends Model
 {
+    use ScopesPatientRecords;
     protected $table = 'service_requests';
     
     protected $fillable = [
@@ -170,7 +172,7 @@ class ServiceRequest extends Model
     
     public function scopeToday($query)
     {
-        return $query->whereDate('requested_at', today());
+        return $query->whereBetween('requested_at', [today(), today()->copy()->endOfDay()]);
     }
     
     public function scopeForCashier($query)

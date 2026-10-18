@@ -3,6 +3,7 @@
 namespace App\Filament\Support;
 
 use Closure;
+use Carbon\CarbonImmutable;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -28,11 +29,11 @@ class TableFilters
                 return $query
                     ->when(
                         $data['from'] ?? null,
-                        fn (Builder $query, $date): Builder => $query->whereDate($column, '>=', $date),
+                        fn (Builder $query, $date): Builder => $query->where($column, '>=', CarbonImmutable::parse($date)->startOfDay()),
                     )
                     ->when(
                         $data['until'] ?? null,
-                        fn (Builder $query, $date): Builder => $query->whereDate($column, '<=', $date),
+                        fn (Builder $query, $date): Builder => $query->where($column, '<', CarbonImmutable::parse($date)->addDay()->startOfDay()),
                     );
             });
     }

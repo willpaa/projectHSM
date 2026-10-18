@@ -50,9 +50,15 @@ class PatientsTable
                 TextColumn::make('email')
                     ->label('Email address')
                     ->searchable(),
+                TextColumn::make('address')
+                    ->limit(40)
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('blood_group')
                     ->badge()
                     ->color('danger'),
+                TextColumn::make('allergies')
+                    ->limit(40)
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('emergency_contact')
                     ->searchable(),
                 TextColumn::make('insurance_id')
@@ -105,6 +111,7 @@ class PatientsTable
                 ]),
                 TableFilters::select('status', [
                     'active' => 'Active',
+                    'today' => 'Today',
                     'inactive' => 'Inactive',
                     'deceased' => 'Deceased',
                 ]),

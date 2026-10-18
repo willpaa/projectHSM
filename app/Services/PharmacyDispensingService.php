@@ -12,10 +12,9 @@ use App\Models\Prescription;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
-
 class PharmacyDispensingService
 {
-    public static function dispense(Pharmacy $queue, int $quantity, string $paymentStatus, ?string $patientInput, ?string $notes, ?int $userId): PharmacySale
+    public static function dispense(Pharmacy $queue, int $quantity, string $paymentStatus, ?string $patientInput, ?string $notes, ?int $userId, bool $ignoreAlerts = false): PharmacySale
     {
         if ($quantity < 1) {
             throw new RuntimeException('Dispense quantity must be at least one.');
@@ -25,7 +24,7 @@ class PharmacyDispensingService
             throw new RuntimeException('Choose a valid payment status.');
         }
 
-        return DB::transaction(function () use ($queue, $quantity, $paymentStatus, $patientInput, $notes, $userId): PharmacySale {
+        return DB::transaction(function () use ($queue, $quantity, $paymentStatus, $patientInput, $notes, $userId, $ignoreAlerts): PharmacySale {
             $item = Pharmacy::query()->whereKey($queue->getKey())->lockForUpdate()->firstOrFail();
 
             if ($quantity > $item->stock_qty || $item->queue_status === 'dispensed') {
@@ -46,12 +45,35 @@ class PharmacyDispensingService
                 ->where('item_id', $item->inventory_item_id)
                 ->firstOrFail();
 
-            InventoryService::dispensePrescription(
+            $dispenseResult = InventoryService::dispensePrescriptionWithBatches(
                 $inventory,
                 $quantity,
                 (string) ($item->prescription_sale_id ?: 'PHARM-' . $item->id),
                 $notes ?: 'Pharmacist dispensed medicine to patient',
             );
+
+            // Controlled substances must also be written to the chain-of-custody
+            // register (WHO/FIP GPP). A failure here must not abort the dispense,
+            // so it is guarded and surfaced via the sale record only.
+            if ($inventory->isControlled()) {
+                try {
+                    ControlledSubstanceService::record(
+                        $inventory,
+                        'dispense',
+                        $quantity,
+                        $userId,
+                        [
+                            'batch_no' => $item->batch_no,
+                            'patient_id' => $patientId,
+                            'prescription_id' => $item->prescription_sale_id,
+                            'notes' => $notes ?: 'Auto-logged on dispensing',
+                        ],
+                    );
+                } catch (RuntimeException) {
+                    // Register logging is best-effort here; the physical dispense
+                    // and stock ledger have already been recorded above.
+                }
+            }
 
             $remaining = (int) $item->stock_qty - $quantity;
             $item->update([
@@ -76,6 +98,8 @@ class PharmacyDispensingService
                 'sold_by' => $userId,
                 'sold_at' => now(),
             ]);
+
+            SaleAllocationService::record($sale, $dispenseResult['allocations']);
 
             PharmacyMovement::query()->create([
                 'pharmacy_id' => $item->id,

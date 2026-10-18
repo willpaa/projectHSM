@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Patients extends Model
 {
+    protected $attributes = [
+        'status' => 'active',
+    ];
+
     protected $fillable = [
         'user_id',
         'patient_id',
@@ -27,6 +31,11 @@ class Patients extends Model
         'status',
     ];
 
+    protected $casts = [
+        'dob' => 'date',
+        'registered_at' => 'datetime',
+    ];
+
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -36,6 +45,11 @@ class Patients extends Model
         return $this->hasMany(PatientHistory::class, 'patient_id')
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
+    }
+
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointments::class, 'patient_id');
     }
 
     public function triages(): HasMany

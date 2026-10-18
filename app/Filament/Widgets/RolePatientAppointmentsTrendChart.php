@@ -28,7 +28,7 @@ class RolePatientAppointmentsTrendChart extends ChartWidget
             ? Appointments::query()
                 ->selectRaw("DATE_FORMAT(`date`, '%Y-%m') as ym, COUNT(*) as total")
                 ->where('patient_id', $patientId)
-                ->whereDate('date', '>=', $start->toDateString())
+                ->where('date', '>=', $start->toDateString())
                 ->groupBy('ym')
                 ->pluck('total', 'ym')
                 ->toArray()

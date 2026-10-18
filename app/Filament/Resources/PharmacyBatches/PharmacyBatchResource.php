@@ -12,8 +12,7 @@ use Filament\Tables\Table;
 class PharmacyBatchResource extends Resource
 {
     protected static ?string $model = PharmacyBatch::class;
-
-    protected static ?string $navigationParentItem = 'Pharmacy Management';
+ protected static ?string $navigationParentItem = 'Pharmacy Management';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 

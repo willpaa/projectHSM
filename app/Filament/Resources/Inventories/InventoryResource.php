@@ -17,7 +17,6 @@ use Filament\Tables\Table;
 class InventoryResource extends Resource
 {
     protected static ?string $model = Inventory::class;
-
     protected static ?string $navigationParentItem = 'Pharmacy Management';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-archive-box';

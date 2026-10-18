@@ -105,37 +105,37 @@
                 <div class="space-y-2">
                     <div class="flex justify-between text-sm py-1 border-b">
                         <span class="text-gray-600">Total Amount:</span>
-                        <span class="font-semibold">${{ number_format($payment->serviceRequest->total_amount ?? 0, 2) }}</span>
+                        <span class="font-semibold">ETB {{ number_format($payment->serviceRequest->total_amount ?? 0, 2) }}</span>
                     </div>
                     
                     @if(($payment->serviceRequest->insurance_share ?? 0) > 0)
                     <div class="flex justify-between text-sm py-1 border-b">
                         <span class="text-gray-600">Insurance Coverage:</span>
-                        <span class="text-green-600 font-semibold">-${{ number_format($payment->serviceRequest->insurance_share, 2) }}</span>
+                        <span class="text-green-600 font-semibold">-ETB {{ number_format($payment->serviceRequest->insurance_share, 2) }}</span>
                     </div>
                     @endif
                     
                     @if(($payment->serviceRequest->discount ?? 0) > 0)
                     <div class="flex justify-between text-sm py-1 border-b">
                         <span class="text-gray-600">Discount:</span>
-                        <span class="text-red-600 font-semibold">-${{ number_format($payment->serviceRequest->discount, 2) }}</span>
+                        <span class="text-red-600 font-semibold">-ETB {{ number_format($payment->serviceRequest->discount, 2) }}</span>
                     </div>
                     @endif
                     
                     <div class="flex justify-between text-base py-2 border-b border-gray-300">
                         <span class="font-bold text-gray-800">Patient Payable:</span>
-                        <span class="font-bold text-gray-800">${{ number_format($payment->serviceRequest->patient_share ?? 0, 2) }}</span>
+                        <span class="font-bold text-gray-800">ETB {{ number_format($payment->serviceRequest->patient_share ?? 0, 2) }}</span>
                     </div>
                     
                     <div class="flex justify-between text-lg py-2">
                         <span class="font-bold text-indigo-600">Amount Paid:</span>
-                        <span class="font-bold text-indigo-600 text-xl">${{ number_format($payment->amount, 2) }}</span>
+                        <span class="font-bold text-indigo-600 text-xl">ETB {{ number_format($payment->amount, 2) }}</span>
                     </div>
                     
                     @if(($payment->serviceRequest->patient_share - $payment->amount) > 0)
                     <div class="flex justify-between text-sm py-2 bg-yellow-50 rounded p-2">
                         <span class="text-yellow-700">Remaining Balance:</span>
-                        <span class="text-yellow-700 font-semibold">${{ number_format($payment->serviceRequest->patient_share - $payment->amount, 2) }}</span>
+                        <span class="text-yellow-700 font-semibold">ETB {{ number_format($payment->serviceRequest->patient_share - $payment->amount, 2) }}</span>
                     </div>
                     @endif
                 </div>
@@ -179,7 +179,7 @@
                             @if($amount > 0)
                             <div class="flex justify-between text-xs">
                                 <span class="capitalize">{{ $mode }}:</span>
-                                <span>${{ number_format($amount, 2) }}</span>
+                                <span>ETB {{ number_format($amount, 2) }}</span>
                             </div>
                             @endif
                         @endforeach

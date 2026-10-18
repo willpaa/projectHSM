@@ -21,7 +21,6 @@ class PrescriptionResource extends Resource
 {
     protected static ?string $model = Prescription::class;
 
-    //protected static ?string $navigationParentItem = 'Pharmacy Management';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 

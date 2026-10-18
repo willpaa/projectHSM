@@ -7,6 +7,93 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Run with Docker
+
+The Docker setup runs the Laravel app on port `8000` and MySQL 8 in a persistent
+named volume. Uploaded files and Laravel logs continue to use this project's
+existing `storage` directories. Database migrations do not run automatically.
+
+### First run
+
+1. Install Docker Engine and the Docker Compose plugin.
+2. Keep your existing `.env` file. If you do not have one, create it with
+   `cp .env.example .env` and set `APP_KEY` before starting the app.
+3. Add `DOCKER_DB_USERNAME=hospital`, `DOCKER_DB_PASSWORD=...`, and
+   `DOCKER_DB_ROOT_PASSWORD=...` to `.env`, using private values for this local
+   Docker database. The Docker username is separate from the host MySQL
+   `DB_USERNAME`. Do not commit `.env`.
+4. Build the app image and start the Docker database:
+
+   ```sh
+   docker compose build app
+   docker compose up -d db
+   ```
+
+5. If you are moving the existing XAMPP database, follow **Bring the existing
+   MySQL data into Docker** below before starting the app. For a brand-new,
+   empty database only, start the app and create its schema:
+
+   ```sh
+   docker compose up -d app
+   docker compose exec app php artisan migrate --force
+   ```
+
+   Then open <http://localhost:8000>.
+
+Compose passes the existing `APP_KEY` into the app, sets `APP_URL` to the local
+Docker address, and points Laravel at the `db` container. MySQL data stays
+in the `hospital_mysql_data` Docker volume when containers stop or are rebuilt.
+On startup, the app container adjusts ownership of the mounted Laravel storage
+directories so Apache can write uploads and logs; it does not remove or rewrite
+their contents.
+Do not run `docker compose down -v`: that command removes the database volume.
+
+### Bring the existing MySQL data into Docker
+
+The first start creates a new, empty Docker database; it never edits or deletes
+your current XAMPP database. To move a copy of your current `hosptalms` database:
+
+1. Stop writes to the current app, then make a SQL backup with the MySQL tools
+   used by your XAMPP installation. Save it somewhere outside this project and
+   confirm that the backup file exists before continuing. For example:
+
+   ```sh
+   mysqldump --single-transaction --routines --triggers -u root hosptalms > /path/to/backup/hosptalms.sql
+   ```
+
+   Add the credentials/options required by your local MySQL setup. Keep this
+   file private because hospital data can contain sensitive information.
+2. Start only Docker's database, then import the backup into it:
+
+   ```sh
+   docker compose up -d db
+   docker compose exec -T db sh -c 'exec mysql -u root -p"$MYSQL_ROOT_PASSWORD" hosptalms' < /path/to/backup/hosptalms.sql
+   ```
+
+   If your dump contains `CREATE DATABASE` statements, review it first and
+   adjust the import command for that dump.
+3. Confirm the import and make a second backup before changing the schema. Only
+   after that, start the app and apply migrations if the app reports they are
+   needed:
+
+   ```sh
+   docker compose up -d app
+   docker compose exec app php artisan migrate --force
+   ```
+
+   Open <http://localhost:8000> after the app container is running.
+
+   Migrations can change the schema, so keep the original XAMPP database and
+   both backups until you have verified the app and records.
+
+Useful commands:
+
+```sh
+docker compose logs -f app
+docker compose stop
+docker compose start
+```
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

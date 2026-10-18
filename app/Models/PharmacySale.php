@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Concerns\ScopesPatientRecords;
 
 class PharmacySale extends Model
 {
+    use ScopesPatientRecords;
     protected $fillable = [
         'sale_id',
         'sale_type',
@@ -53,5 +56,10 @@ class PharmacySale extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sold_by');
+    }
+
+    public function batches(): HasMany
+    {
+        return $this->hasMany(PharmacySaleBatch::class, 'pharmacy_sale_id');
     }
 }

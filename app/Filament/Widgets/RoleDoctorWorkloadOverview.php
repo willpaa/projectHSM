@@ -19,6 +19,7 @@ class RoleDoctorWorkloadOverview extends StatsOverviewWidget
     protected function getStats(): array
     {
         $doctorIds = $this->resolveCurrentDoctorIds();
+        $userIsDoctor = auth()->user()?->hasRole('doctor') ?? false;
         $hasDoctor = $doctorIds !== [];
 
         $appointmentsQuery = Appointments::query();
@@ -27,13 +28,16 @@ class RoleDoctorWorkloadOverview extends StatsOverviewWidget
         if ($hasDoctor) {
             $appointmentsQuery->whereIn('doctor_id', $doctorIds);
             $prescriptionQuery->whereIn('doctor_id', $doctorIds);
+        } elseif ($userIsDoctor) {
+            $appointmentsQuery->whereRaw('1 = 0');
+            $prescriptionQuery->whereRaw('1 = 0');
         }
 
         $todayAppointments = (clone $appointmentsQuery)
-            ->whereDate('date', today())
+            ->where('date', today()->toDateString())
             ->count();
         $scheduledAppointments = (clone $appointmentsQuery)
-            ->where('status', 'scheduled')
+            ->whereIn('status', ['requested', 'scheduled', 'checked_in', 'in_progress'])
             ->count();
         $completedAppointments = (clone $appointmentsQuery)
             ->where('status', 'completed')
@@ -45,27 +49,27 @@ class RoleDoctorWorkloadOverview extends StatsOverviewWidget
 
         return [
             Stat::make('Appointments Today', (string) $todayAppointments)
-                ->description($hasDoctor ? 'Your schedule today' : 'All doctors today')
+                ->description($hasDoctor ? 'Your schedule today' : ($userIsDoctor ? 'Link your doctor profile to see your schedule' : 'All doctors today'))
                 ->icon('heroicon-o-calendar-days')
                 ->url(AppointmentsResource::getUrl('index'))
                 ->extraAttributes($this->cardStyle('#0EA5E9')),
-            Stat::make('Scheduled', (string) $scheduledAppointments)
-                ->description($hasDoctor ? 'Your pending visits' : 'All pending visits')
+            Stat::make('Active appointments', (string) $scheduledAppointments)
+                ->description($hasDoctor ? 'Your pending visits' : ($userIsDoctor ? 'Link your doctor profile to see appointments' : 'All pending visits'))
                 ->icon('heroicon-o-clock')
                 ->url(AppointmentsResource::getUrl('index'))
                 ->extraAttributes($this->cardStyle('#2563EB')),
             Stat::make('Completed', (string) $completedAppointments)
-                ->description($hasDoctor ? 'Your completed visits' : 'All completed visits')
+                ->description($hasDoctor ? 'Your completed visits' : ($userIsDoctor ? 'Link your doctor profile to see completed visits' : 'All completed visits'))
                 ->icon('heroicon-o-check-badge')
                 ->url(AppointmentsResource::getUrl('index'))
                 ->extraAttributes($this->cardStyle('#16A34A')),
             Stat::make('Patients', (string) $patientCount)
-                ->description($hasDoctor ? 'Unique patients assigned' : 'Unique patients in appointments')
+                ->description($hasDoctor ? 'Unique patients assigned' : ($userIsDoctor ? 'Link your doctor profile to see patients' : 'Unique patients in appointments'))
                 ->icon('heroicon-o-users')
                 ->url(PatientsResource::getUrl('index'))
                 ->extraAttributes($this->cardStyle('#7C3AED')),
             Stat::make('Prescriptions', (string) $prescriptions)
-                ->description($hasDoctor ? 'Prescriptions you issued' : 'All prescriptions')
+                ->description($hasDoctor ? 'Prescriptions you issued' : ($userIsDoctor ? 'Link your doctor profile to see prescriptions' : 'All prescriptions'))
                 ->icon('heroicon-o-document-text')
                 ->url(PrescriptionResource::getUrl('index'))
                 ->extraAttributes($this->cardStyle('#0F766E')),

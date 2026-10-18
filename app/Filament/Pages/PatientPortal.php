@@ -44,6 +44,15 @@ class PatientPortal extends Page
             'prescriptions' => $patientId
                 ? Prescription::query()->with('doctor')->where('patient_id', $patientId)->latest('prescribed_date')->limit(5)->get()
                 : collect(),
+            'labRequests' => $patientId
+                ? ServiceRequest::query()
+                    ->with('service')
+                    ->where('patient_id', $patientId)
+                    ->whereHas('service', fn ($query) => $query->where('service_type', 'lab'))
+                    ->latest('requested_at')
+                    ->limit(5)
+                    ->get()
+                : collect(),
             'histories' => $patientId
                 ? PatientHistory::query()->where('patient_id', $patientId)->latest('occurred_at')->limit(6)->get()
                 : collect(),

@@ -22,37 +22,38 @@ class RolePharmacyOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
+        $todayStart = today();
+        $todayEnd = $todayStart->copy()->endOfDay();
+
         $todayPrescriptions = Prescription::query()
-            ->whereDate('created_at', today())
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->count();
 
         $todayDispensed = abs((int) InventoryTransaction::query()
             ->where('operation_type', 'dispense')
-            ->whereDate('created_at', today())
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->sum('quantity'));
 
         $todaySales = (float) PharmacySale::query()
-            ->whereDate('sold_at', today())
+            ->whereBetween('sold_at', [$todayStart, $todayEnd])
             ->sum('total_amount');
 
         $lowStock = Inventory::query()
             ->whereColumn('quantity', '<=', 'reorder_level')
             ->count();
 
-        $expiredSoon = PharmacyBatch::query()
+        $expiryStats = PharmacyBatch::query()
             ->where('quantity_remaining', '>', 0)
-            ->whereDate('expiry_date', '>=', today())
-            ->whereDate('expiry_date', '<=', today()->copy()->addDays(30))
-            ->count();
+            ->whereNotNull('expiry_date')
+            ->selectRaw('SUM(CASE WHEN expiry_date >= ? AND expiry_date <= ? THEN 1 ELSE 0 END) as expiring_soon', [today()->toDateString(), today()->addDays(30)->toDateString()])
+            ->selectRaw('SUM(CASE WHEN expiry_date < ? THEN 1 ELSE 0 END) as expired_stock', [today()->toDateString()])
+            ->first();
+
+        $expiredSoon = (int) $expiryStats->expiring_soon;
+        $expiredStock = (int) $expiryStats->expired_stock;
 
         $pharmacyQueue = Pharmacy::query()
             ->whereIn('queue_status', ['pending', 'backordered', 'partially_dispensed'])
-            ->count();
-
-        $expiredStock = PharmacyBatch::query()
-            ->where('quantity_remaining', '>', 0)
-            ->whereNotNull('expiry_date')
-            ->whereDate('expiry_date', '<', today())
             ->count();
 
         return [
@@ -61,19 +62,19 @@ class RolePharmacyOverview extends StatsOverviewWidget
                 ->icon('heroicon-o-document-text')
                  ->color('gray')
                 ->url(PrescriptionResource::getUrl('index'))
-                ->extraAttributes($this->cardStyle('#ccfbf1')),
+                ->extraAttributes($this->cardStyle('#37d7b4')),
             Stat::make('Today Dispensed', (string) $todayDispensed)
                 ->description('Medicines dispensed today')
                 ->icon('heroicon-o-check-badge')
                 ->color('gray')
                 ->url(PharmacyResource::getUrl('index'))
-                ->extraAttributes($this->cardStyle('#dbeafe')),
+                ->extraAttributes($this->cardStyle('#68a4f3')),
             Stat::make('Today Sales', 'ETB' . number_format($todaySales, 2))
                 ->description('Pharmacy sales recorded today')
                 ->icon('heroicon-o-banknotes')
                  ->color('gray')
                 ->url(PharmacySaleResource::getUrl('index'))
-                ->extraAttributes($this->cardStyle('#ede9fe')),
+                ->extraAttributes($this->cardStyle('#8167f1')),
             Stat::make('Low Stock', (string) $lowStock)
                 ->description('Items at or below reorder level')
                 ->icon('heroicon-o-exclamation-triangle')

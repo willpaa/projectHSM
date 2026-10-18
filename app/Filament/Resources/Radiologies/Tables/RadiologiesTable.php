@@ -7,6 +7,9 @@ use App\Models\Radiology;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Support\ClinicalReportAccess;
+use App\Support\ClinicalStaffAccess;
+use App\Support\ClinicalResultNotifier;
+use App\Support\PatientPortal;
 use App\Support\ServiceRequestNotifier;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -16,15 +19,12 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
 use Filament\Actions\Action;
-use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-
-use App\Models\User;
 
 class RadiologiesTable
 {
@@ -46,13 +46,22 @@ class RadiologiesTable
                 TextColumn::make('doctor.full_name')
                     ->label('Doctor')
                     ->searchable(),
+                TextColumn::make('radiologist.full_name')
+                    ->label('Assigned Radiology Technician')
+                    ->searchable()
+                    ->placeholder('Unassigned'),
                 TextColumn::make('exam_name')
                     ->searchable(),
                 TextColumn::make('modality')
                     ->searchable(),
                 TextColumn::make('result_status')
                     ->badge()
-                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser()),
+                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser() || ClinicalStaffAccess::isRadiologyStaff()),
+                TextColumn::make('result_summary')
+                    ->label('Result Summary')
+                    ->limit(60)
+                    ->wrap()
+                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser() || ClinicalStaffAccess::isRadiologyStaff()),
                 TextColumn::make('serviceRequest.payment_status')
                     ->label('Payment')
                     ->badge()
@@ -73,6 +82,8 @@ class RadiologiesTable
             ->filters([
                 TableFilters::relationship('patient', 'full_name', 'Patient'),
                 TableFilters::relationship('doctor', 'full_name', 'Doctor'),
+                TableFilters::relationship('radiologist', 'full_name', 'Radiology Technician')
+                    ->visible(fn (): bool => ! ClinicalStaffAccess::isRadiologyStaff()),
                 TableFilters::distinct('exam_name', Radiology::class, 'Exam Name'),
                 TableFilters::distinct('modality', Radiology::class, 'Modality'),
                 TableFilters::select('result_status', [
@@ -90,7 +101,7 @@ class RadiologiesTable
                 TableFilters::dateRange('exam_date', 'Exam Date'),
                 TableFilters::createdAt(),
             ], layout: FiltersLayout::AboveContentCollapsible)
-            ->modifyQueryUsing(fn ($query) => $query->with(['patient', 'doctor', 'serviceRequest.service']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['patient', 'doctor', 'radiologist', 'serviceRequest.service']))
             ->recordActions([
 
                 Action::make('send_to_cashier')
@@ -99,7 +110,7 @@ class RadiologiesTable
                     ->color('warning')
                     ->modalHeading('Create Radiology Payment Request')
                     ->modalDescription('This does not collect cash. Select the radiology service price, then the cashier will collect payment and choose the payment method.')
-                    ->visible(fn (Radiology $record): bool => blank($record->service_request_id) && filled($record->patient_id))
+                    ->visible(fn (Radiology $record): bool => ! PatientPortal::isPatientUser() && blank($record->service_request_id) && filled($record->patient_id))
                     ->form([
                         Select::make('service_id')
                             ->label('Radiology Service')
@@ -159,6 +170,8 @@ class RadiologiesTable
                             ->success()
                             ->send();
                     }),
+
+
                 Action::make('cashier_request_status')
                     ->label(fn (Radiology $record): string => $record->serviceRequest?->payment_status === 'paid'
                         ? 'Payment Completed'
@@ -169,7 +182,7 @@ class RadiologiesTable
                     ->color(fn (Radiology $record): string => $record->serviceRequest?->payment_status === 'paid'
                         ? 'success'
                         : 'warning')
-                    ->visible(fn (Radiology $record): bool => filled($record->service_request_id))
+                    ->visible(fn (Radiology $record): bool => ! PatientPortal::isPatientUser() && filled($record->service_request_id))
                     ->disabled(fn (Radiology $record): bool => $record->serviceRequest?->payment_status === 'paid')
                     ->action(function (Radiology $record): void {
                         if ($record->serviceRequest?->payment_status === 'paid') {
@@ -190,11 +203,20 @@ class RadiologiesTable
     ->icon('heroicon-o-check-circle')
     ->color('success')
     ->hidden(fn ($record) => $record->status === 'completed' || ! $record->paymentCleared())
+    ->visible(fn (Radiology $record): bool => ! PatientPortal::isPatientUser()
+        && (ClinicalStaffAccess::isRadiologyStaff()
+            ? ClinicalStaffAccess::canManageRadiology($record)
+            : ! ClinicalStaffAccess::isLabStaff()))
     ->form([
         FileUpload::make('report_image')
             ->label('Upload Scan/X-Ray')
             ->directory('radiology-reports')
-            ->image(),
+            ->image()
+            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->maxSize(10240),
+        Textarea::make('result_summary')
+            ->label('Result Summary')
+            ->rows(3),
         Textarea::make('findings')
             ->label('Radiology Findings')
             ->required()
@@ -211,7 +233,7 @@ class RadiologiesTable
             ->label('Conclusion/Recommendation')
             ->required(),
     ])
-    ->action(function ($record, array $data): void {
+    ->action(function (Radiology $record, array $data): void {
         if (! $record->paymentCleared()) {
             Notification::make()
                 ->title('Payment is not cleared.')
@@ -222,8 +244,8 @@ class RadiologiesTable
             return;
         }
 
-        // 1. Update the Radiology Record
         $record->update([
+            'result_summary' => $data['result_summary'] ?? null,
             'findings' => $data['findings'],
             'conclusion' => $data['conclusion'],
             'report_image' => $data['report_image'],
@@ -235,28 +257,41 @@ class RadiologiesTable
             'fulfillment_status' => 'completed',
         ]);
 
-        // 2. Find the doctor's user account to notify them
-        $doctorUser = $record->doctor?->user; 
-
-        if ($doctorUser) {
+        if (ClinicalResultNotifier::notifyDoctor($record->refresh())) {
             Notification::make()
-                ->title('Radiology Result Available')
-                ->body("The results for patient {$record->patient?->full_name} ({$record->radiology_id}) are ready for review.")
-                ->icon('heroicon-o-document-magnifying-glass')
-                ->actions([
-                    NotificationAction::make('view_result')
-                        ->label('View Result')
-                        ->url(\App\Filament\Resources\Radiologies\RadiologyResource::getUrl('view', ['record' => $record])),
-                ])
-                ->info()
-                ->sendToDatabase($doctorUser);
+                ->title('Result submitted and doctor notified.')
+                ->success()
+                ->send();
+        } else {
+            Notification::make()
+                ->title('Result saved, but the doctor was not notified.')
+                ->body('Link a user account to the assigned doctor, then resend the notification.')
+                ->warning()
+                ->send();
         }
-
-        Notification::make()
-            ->title('Result submitted successfully')
-            ->success()
-            ->send();
     }),
+                Action::make('notify_doctor')
+                    ->label('Resend to Doctor')
+                    ->icon('heroicon-o-bell-alert')
+                    ->color('info')
+                    ->requiresConfirmation()
+                    ->visible(fn (Radiology $record): bool => ! PatientPortal::isPatientUser() && $record->status === 'completed')
+                    ->action(function (Radiology $record): void {
+                        if (! ClinicalResultNotifier::notifyDoctor($record)) {
+                            Notification::make()
+                                ->title('The assigned doctor has no linked user account.')
+                                ->body('Link a user account to the doctor before sending the result.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Assigned doctor notified again.')
+                            ->success()
+                            ->send();
+                    }),
                 ViewAction::make(),
                 EditAction::make(),
             ])

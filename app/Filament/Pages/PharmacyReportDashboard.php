@@ -7,11 +7,13 @@ use Filament\Pages\Page;
 
 class PharmacyReportDashboard extends Page
 {
-    protected static bool $shouldRegisterNavigation = false;
+    protected static bool $shouldRegisterNavigation = true;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-presentation-chart-line';
 
     protected static ?string $navigationLabel = 'Pharmacy Reports';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Pharmacy';
 
     protected static ?int $navigationSort = 40;
 

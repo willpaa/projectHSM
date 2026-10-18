@@ -22,12 +22,20 @@ class RoleDoctorLabResults extends TableWidget
     {
         return $table
             ->heading('Recent Lab Results')
-            ->query(fn (): Builder => Laboratory::query()
-                ->with('patient')
-                ->where('doctor_id', ClinicalReportAccess::currentDoctorId())
-                ->where('status', 'completed')
-                ->latest('result_date')
-                ->limit(8))
+            ->query(function (): Builder {
+                $doctorId = ClinicalReportAccess::currentDoctorId();
+                $query = Laboratory::query()->with('patient');
+
+                if ($doctorId === null) {
+                    return $query->whereRaw('1 = 0');
+                }
+
+                return $query
+                    ->where('doctor_id', $doctorId)
+                    ->where('status', 'completed')
+                    ->latest('result_date')
+                    ->limit(8);
+            })
             ->columns([
                 TextColumn::make('lab_id')->label('Lab ID'),
                 TextColumn::make('patient.full_name')->label('Patient'),
@@ -77,7 +85,7 @@ class RoleDoctorLabResults extends TableWidget
 
     public static function canView(): bool
     {
-        return ClinicalReportAccess::isDoctorUser();
+        return auth()->user()?->hasRole('doctor') ?? false;
     }
 
     private static function formatResult(Laboratory $record): string

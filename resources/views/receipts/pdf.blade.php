@@ -414,37 +414,37 @@
                 
                 <div class="breakdown-row">
                     <span class="breakdown-label">Total Amount</span>
-                    <span class="breakdown-value">${{ number_format($payment->serviceRequest->total_amount ?? 0, 2) }}</span>
+                    <span class="breakdown-value">ETB {{ number_format($payment->serviceRequest->total_amount ?? 0, 2) }}</span>
                 </div>
                 
                 @if(($payment->serviceRequest->insurance_share ?? 0) > 0)
                 <div class="breakdown-row">
                     <span class="breakdown-label">Insurance Coverage</span>
-                    <span class="breakdown-value" style="color: #10b981;">-${{ number_format($payment->serviceRequest->insurance_share, 2) }}</span>
+                    <span class="breakdown-value" style="color: #10b981;">-ETB {{ number_format($payment->serviceRequest->insurance_share, 2) }}</span>
                 </div>
                 @endif
                 
                 @if(($payment->serviceRequest->discount ?? 0) > 0)
                 <div class="breakdown-row">
                     <span class="breakdown-label">Discount Applied</span>
-                    <span class="breakdown-value" style="color: #ef4444;">-${{ number_format($payment->serviceRequest->discount, 2) }}</span>
+                    <span class="breakdown-value" style="color: #ef4444;">-ETB {{ number_format($payment->serviceRequest->discount, 2) }}</span>
                 </div>
                 @endif
                 
                 <div class="breakdown-row" style="background: #f3f4f6; font-weight: 600;">
                     <span class="breakdown-label">Patient Payable Amount</span>
-                    <span class="breakdown-value">${{ number_format($payment->serviceRequest->patient_share ?? 0, 2) }}</span>
+                    <span class="breakdown-value">ETB {{ number_format($payment->serviceRequest->patient_share ?? 0, 2) }}</span>
                 </div>
                 
                 <div class="paid-row">
                     <span class="paid-label">✓ AMOUNT PAID</span>
-                    <span class="paid-value">${{ number_format($payment->amount, 2) }}</span>
+                    <span class="paid-value">ETB {{ number_format($payment->amount, 2) }}</span>
                 </div>
                 
                 @if(($payment->serviceRequest->patient_share - $payment->amount) > 0)
                 <div class="remaining-row">
                     <span class="remaining-label">⚠️ Remaining Balance</span>
-                    <span class="remaining-value">${{ number_format($payment->serviceRequest->patient_share - $payment->amount, 2) }}</span>
+                    <span class="remaining-value">ETB {{ number_format($payment->serviceRequest->patient_share - $payment->amount, 2) }}</span>
                 </div>
                 @endif
             </div>
@@ -504,7 +504,7 @@
                         @if($amount > 0)
                         <div class="info-row">
                             <div class="info-label" style="padding-left: 15px;">{{ ucfirst($mode) }}</div>
-                            <div class="info-value">${{ number_format($amount, 2) }}</div>
+                            <div class="info-value">ETB {{ number_format($amount, 2) }}</div>
                         </div>
                         @endif
                     @endforeach
@@ -539,7 +539,7 @@
                     </div>
                     <div class="info-row">
                         <div class="info-label">Coverage Amount</div>
-                        <div class="info-value">${{ number_format($payment->serviceRequest->insurance_share ?? 0, 2) }}</div>
+                        <div class="info-value">ETB {{ number_format($payment->serviceRequest->insurance_share ?? 0, 2) }}</div>
                     </div>
                 </div>
             </div>

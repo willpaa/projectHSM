@@ -12,6 +12,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -19,7 +20,10 @@ use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Throwable;
 
 class InventoriesTable
@@ -31,18 +35,92 @@ class InventoriesTable
                 TextColumn::make('no')
                     ->label('#')
                     ->rowIndex(),
+                // ── Item Identification (matches Form Section 1) ──
                 TextColumn::make('item_id')
-                    ->searchable(),
+                    ->label('Item Code')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('sku_code')
+                    ->label('SKU')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(),
+                TextColumn::make('barcode')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('item_name')
-                    ->searchable(),
+                    ->label('Brand / Trade Name')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('generic_name')
+                    ->label('Generic Name')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(),
+                TextColumn::make('atc_code')
+                    ->label('ATC Code')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('drug_form')
+                    ->label('Dosage Form')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('strength')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('therapeutic_class')
+                    ->label('Therapeutic Class')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('category')
-                    ->searchable(),
-                TextColumn::make('unit')
-                    ->searchable(),
-                TextColumn::make('quantity')
-                    ->numeric()
                     ->badge()
-                    ->color(fn (int $state, Inventory $record): string => $state <= $record->reorder_level ? 'danger' : 'success')
+                    ->formatStateUsing(fn (?string $state): string => $state
+                        ? ucwords(str_replace('_', ' ', (string) $state))
+                        : 'Uncategorised')
+                    ->color('info')
+                    ->toggleable(),
+                // ── Regulatory & Storage (matches Form Section 2) ──
+                TextColumn::make('requires_prescription')
+                    ->label('Rx / OTC')
+                    ->badge()
+                    ->formatStateUsing(fn (bool $state): string => $state ? 'Rx' : 'OTC')
+                    ->color(fn (bool $state): string => $state ? 'warning' : 'success')
+                    ->toggleable(),
+                TextColumn::make('is_controlled')
+                    ->label('Controlled')
+                    ->badge()
+                    ->formatStateUsing(fn (bool $state): string => $state ? 'Controlled' : '-')
+                    ->color(fn (bool $state): string => $state ? 'danger' : 'gray')
+                    ->toggleable(),
+                TextColumn::make('is_active')
+                    ->label('Active')
+                    ->badge()
+                    ->formatStateUsing(fn (bool $state): string => $state ? 'Active' : 'Archived')
+                    ->color(fn (bool $state): string => $state ? 'success' : 'gray')
+                    ->toggleable(),
+                TextColumn::make('storage_condition')
+                    ->label('Storage Condition')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => ucfirst((string) $state))
+                    ->color(fn (?string $state): string => in_array($state, ['cold', 'frozen'], true) ? 'info' : 'gray')
+                    ->toggleable(),
+                TextColumn::make('store_location')
+                    ->label('Store Location')
+                    ->placeholder('-')
+                    ->toggleable(),
+                // ── Stock, Pricing & Reorder (matches Form Section 3) ──
+                TextColumn::make('unit')
+                    ->label('Base Unit')
+                    ->toggleable(),
+                TextColumn::make('pack_size')
+                    ->label('Pack Size')
+                    ->numeric()
+                    ->toggleable(),
+                TextColumn::make('quantity')
+                    ->label('Opening Stock Qty')
+                    ->numeric()
                     ->sortable()
                     ->summarize(
                         Sum::make()
@@ -50,61 +128,80 @@ class InventoriesTable
                             ->query(fn ($query) => $query->selectRaw('SUM(quantity) as aggregate'))
                     ),
                 TextColumn::make('reorder_level')
+                    ->label('Reorder Level')
                     ->numeric()
-                    ->sortable(),
-                TextColumn::make('supplier_id')
-                    ->searchable(),
+                    ->toggleable(),
                 TextColumn::make('purchase_price')
+                    ->label('Purchase Price')
                     ->money('ETB')
-                    ->sortable(),
-                TextColumn::make('total_cost')
-                    ->label('Total Purchase (quantity × purchase)')
-                    ->getStateUsing(function ($record) {
-                        return $record->purchase_price * $record->quantity;
-                    })
-                    ->summarize(
-                        Summarizer::make()
-                            ->label('Total Purchase')
-                            ->using(fn ($query) => $query->sum(\DB::raw('purchase_price * quantity')))
-                            ->money('ETB')
-                    )
-                    ->money('ETB'),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('selling_price')
+                    ->label('Selling Price')
                     ->money('ETB')
                     ->sortable(),
-                TextColumn::make('total_celling')
-                    ->label('Total Selling Price')
-                    ->getStateUsing(function ($record) {
-                        return $record->selling_price * $record->quantity;
-                    })
-                    ->summarize(
-                        Summarizer::make()
-                            ->label('Total Selling Price')
-                            ->using(fn ($query) => $query->sum(\DB::raw('selling_price * quantity')))
-                            ->money('ETB')
-                    )
-                    ->money('ETB'),
+                TextColumn::make('tax_rate')
+                    ->label('Tax / VAT %')
+                    ->formatStateUsing(fn ($state): string => $state > 0 ? $state . '%' : '-')
+                    ->toggleable(),
+                TextColumn::make('supplier.name')
+                    ->label('Preferred Supplier')
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('expiry_date')
+                    ->label('Expiry Date')
                     ->date()
-                    ->sortable(),
-                TextColumn::make('store_location')
-                    ->searchable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->placeholder('-')
+                    ->toggleable(),
             ])
             ->filters([
                 TableFilters::distinct('category', Inventory::class, 'Category'),
                 TableFilters::distinct('unit', Inventory::class, 'Unit'),
-                TableFilters::distinct('supplier_id', Inventory::class, 'Supplier'),
-                TableFilters::distinct('store_location', Inventory::class, 'Store Location'),
                 TableFilters::dateRange('expiry_date', 'Expiry Date'),
-                TableFilters::createdAt(),
+                SelectFilter::make('stock_status')
+                    ->label('Stock Status')
+                    ->options([
+                        'in_stock' => 'In stock',
+                        'low_stock' => 'Low stock (at/below reorder level)',
+                        'out_of_stock' => 'Out of stock',
+                    ])
+                    ->query(function (Builder $query, array $data): void {
+                        $status = $data['value'] ?? null;
+                        if (! $status) {
+                            return;
+                        }
+                        $query->when($status === 'out_of_stock', fn ($q) => $q->where('quantity', '<=', 0))
+                            ->when($status === 'low_stock', fn ($q) => $q
+                                ->where('quantity', '>', 0)
+                                ->whereColumn('quantity', '<=', 'reorder_level'))
+                            ->when($status === 'in_stock', fn ($q) => $q->whereColumn('quantity', '>', 'reorder_level'));
+                    }),
+                SelectFilter::make('expiry_status')
+                    ->label('Expiry Status')
+                    ->options([
+                        'expired' => 'Expired',
+                        'expiring' => 'Expiring within 90 days',
+                        'valid' => 'Valid (>90 days)',
+                    ])
+                    ->query(function (Builder $query, array $data): void {
+                        $status = $data['value'] ?? null;
+                        if (! $status) {
+                            return;
+                        }
+                        $query->when($status === 'expired', fn ($q) => $q
+                            ->whereNotNull('expiry_date')->where('expiry_date', '<', today()))
+                            ->when($status === 'expiring', fn ($q) => $q
+                                ->whereNotNull('expiry_date')->whereBetween('expiry_date', [today(), today()->addDays(90)]))
+                            ->when($status === 'valid', fn ($q) => $q
+                                ->whereNull('expiry_date')->orWhere('expiry_date', '>', today()->addDays(90)));
+                    }),
+                TernaryFilter::make('is_active')
+                    ->label('Active Items')
+                    ->placeholder('All items')
+                    ->trueLabel('Active only')
+                    ->falseLabel('Archived only'),
+                TableFilters::distinct('storage_condition', Inventory::class, 'Storage Condition'),
             ], layout: FiltersLayout::AboveContentCollapsible)
             ->recordActions([
                 Action::make('purchase_order')
@@ -132,8 +229,15 @@ class InventoriesTable
                             ->default(fn (Inventory $record): float => (float) $record->purchase_price)
                             ->required(),
                         TextInput::make('supplier_id')
-                            ->label('Supplier')
-                            ->default(fn (Inventory $record): ?string => $record->supplier_id),
+                            ->label('Supplier Code (legacy)')
+                            ->default(fn (Inventory $record): ?string => $record->supplier_id)
+                            ->helperText('Or choose a registered supplier below — it is stored against the batch record.'),
+                        Select::make('supplier_ref_id')
+                            ->label('Registered Supplier')
+                            ->relationship('supplier', 'name')
+                            ->searchable()
+                            ->preload()
+                            ->default(fn (Inventory $record): ?int => $record->supplier_ref_id),
                         TextInput::make('po_id')
                             ->label('PO / Invoice Reference')
                             ->required(),
@@ -153,6 +257,10 @@ class InventoriesTable
                                 (float) $data['purchase_price'],
                                 $data['supplier_id'] ?? null,
                             );
+
+                            if (filled($data['supplier_ref_id'] ?? null)) {
+                                $record->update(['supplier_ref_id' => (int) $data['supplier_ref_id']]);
+                            }
 
                             Notification::make()
                                 ->title('Purchase stock added successfully.')

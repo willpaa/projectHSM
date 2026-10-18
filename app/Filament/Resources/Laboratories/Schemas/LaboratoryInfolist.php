@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Laboratories\Schemas;
 
 use App\Support\ClinicalReportAccess;
+use App\Support\ClinicalStaffAccess;
+use App\Support\PatientPortal;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -18,6 +20,7 @@ class LaboratoryInfolist
                         TextEntry::make('lab_id')->placeholder('-'),
                         TextEntry::make('patient.full_name')->label('Patient')->placeholder('-'),
                         TextEntry::make('doctor.full_name')->label('Doctor')->placeholder('-'),
+                        TextEntry::make('laboratorist.full_name')->label('Laboratorist')->placeholder('Unassigned'),
                         TextEntry::make('test_name')->placeholder('-'),
                         TextEntry::make('test_type')->placeholder('-'),
                         TextEntry::make('sample_type')->placeholder('-'),
@@ -54,7 +57,9 @@ class LaboratoryInfolist
                         TextEntry::make('notes')->placeholder('-')->columnSpanFull(),
                     ])
                     ->columns(2)
-                    ->visible(fn ($record): bool => ClinicalReportAccess::canViewReport($record)),
+                    ->visible(fn ($record): bool => PatientPortal::isPatientUser()
+                        || ClinicalReportAccess::canViewReport($record)
+                        || ClinicalStaffAccess::canManageLaboratory($record)),
                 Section::make('Audit Trail')
                     ->schema([
                         TextEntry::make('created_at')->dateTime()->placeholder('-'),

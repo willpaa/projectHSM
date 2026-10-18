@@ -13,6 +13,7 @@ use App\Filament\Widgets\RoleBillingOverview;
 use App\Filament\Widgets\RoleBillingStatusChart;
 use App\Filament\Widgets\RoleDoctorWorkloadOverview;
 use App\Filament\Widgets\RoleDoctorLabResults;
+use App\Filament\Widgets\RoleDoctorRadiologyResults;
 use App\Filament\Widgets\RoleDoctorWeeklyAppointmentsChart;
 use App\Filament\Widgets\RoleOperationsDepartmentChart;
 use App\Filament\Widgets\RolePharmacyOverview;
@@ -43,86 +44,115 @@ class Dashboard extends BaseDashboard
         $role = $this->getCurrentRole();
 
         if (in_array($role, ['admin', 'super_admin'], true)) {
-            return [
+            return $this->includePharmacyReportForAuthorizedUser([
                 HospitalStatsOverview::class,
                 CashierOverview::class,
+                RolePharmacyReportOverview::class,
                // CashierQueue::class,
                 CashierPaymentModeChart::class,
                 HospitalIncomeExpenseChart::class,
                 HospitalAppointmentsPieChart::class,
                 HospitalReportsTypeChart::class,
-            ];
+            ]);
+        }
+
+        // A user may have multiple roles, and their first stored role may not be doctor.
+        if (auth()->user()?->hasRole('doctor')) {
+            $role = 'doctor';
         }
 
         if ($role === 'doctor') {
-            return [
+            return $this->includePharmacyReportForAuthorizedUser([
                 RoleDoctorWorkloadOverview::class,
                 RoleDoctorLabResults::class,
+                RoleDoctorRadiologyResults::class,
                 RoleDoctorWeeklyAppointmentsChart::class,
                 HospitalAppointmentsPieChart::class,
                 HospitalReportsTypeChart::class,
-            ];
+            ]);
         }
 
         if (in_array($role, ['nurse', 'triage_nurse'], true)) {
-            return [
+            return $this->includePharmacyReportForAuthorizedUser([
                 RoleDoctorWorkloadOverview::class,
                 RoleDoctorWeeklyAppointmentsChart::class,
                 HospitalAppointmentsPieChart::class,
                 HospitalReportsTypeChart::class,
-            ];
+            ]);
         }
 
         if (in_array($role, ['opd_staff', 'ipd_staff', 'receptionist'], true)) {
-            return [
+            return $this->includePharmacyReportForAuthorizedUser([
                 RolePatientFlowOverview::class,
                 RoleOperationsDepartmentChart::class,
                 HospitalAppointmentsPieChart::class,
                 HospitalIncomeExpenseChart::class,
-            ];
+            ]);
         }
 
         if (in_array($role, ['cashier', 'casher', 'billing_staff', 'accountant'], true)) {
-            return [
+            return $this->includePharmacyReportForAuthorizedUser([
                 CashierOverview::class,
                 CashierQueue::class,
                 CashierPaymentModeChart::class,
-            ];
+            ]);
         }
 
-        if (in_array($role, ['lab_staff', 'laboratory_staff', 'radiology_staff'], true)) {
-            return [
+        if (in_array($role, ['lab_staff', 'laboratory_staff', 'lab_technician', 'radiology_staff', 'radiology_technician'], true)) {
+            return $this->includePharmacyReportForAuthorizedUser([
                 RolePatientFlowOverview::class,
                 RoleOperationsDepartmentChart::class,
                 HospitalReportsTypeChart::class,
                 HospitalStatsOverview::class,
-            ];
+            ]);
         }
 
         $user = auth()->user();
 
         // Older staff accounts were created with the misspelled role `pharmcy`.
         if ($user?->hasAnyRole(['pharmacy_staff', 'pharmacist', 'pharmacy', 'pharmcy'])) {
-            return [
+            return $this->includePharmacyReportForAuthorizedUser([
                 RolePharmacyOverview::class,
                 RolePharmacySalesMixChart::class,
                 RolePharmacyReportOverview::class,
                 RolePharmacyQueue::class,
                 RolePharmacyExpiringStock::class,
-            ];
+            ]);
         }
 
         if ($role === 'patient') {
-            return [
+            return $this->includePharmacyReportForAuthorizedUser([
                 RolePatientSelfServiceOverview::class,
                 RolePatientAppointmentsTrendChart::class,
-            ];
+            ]);
         }
 
-        return [
+        return $this->includePharmacyReportForAuthorizedUser([
             HospitalStatsOverview::class,
             HospitalAppointmentsPieChart::class,
-        ];
+        ]);
+    }
+
+    /** @param array<class-string> $widgets
+     *  @return array<class-string>
+     */
+    private function includePharmacyReportForAuthorizedUser(array $widgets): array
+    {
+        $user = auth()->user();
+        $canViewReport = $user?->hasAnyRole([
+            'admin',
+            'super_admin',
+            'pharmacy_staff',
+            'pharmacist',
+            'pharmacy',
+            'pharmcy',
+        ]) ?? false;
+
+        if ($canViewReport && ! in_array(RolePharmacyReportOverview::class, $widgets, true)) {
+            $widgets[] = RolePharmacyReportOverview::class;
+        }
+
+        return $widgets;
     }
 
     public function getColumns(): int|array
@@ -147,7 +177,8 @@ class Dashboard extends BaseDashboard
             $user->hasAnyRole(['nurse', 'triage_nurse']) => 'Nursing Dashboard',
             $user->hasAnyRole(['opd_staff', 'ipd_staff', 'receptionist']) => 'Patient Operations Dashboard',
             $user->hasAnyRole(['cashier', 'casher', 'billing_staff', 'accountant']) => 'Cashier Dashboard',
-            $user->hasAnyRole(['lab_staff', 'laboratory_staff', 'radiology_staff']) => 'Laboratory Dashboard',
+            $user->hasAnyRole(['lab_staff', 'laboratory_staff', 'lab_technician']) => 'Laboratory Dashboard',
+            $user->hasAnyRole(['radiology_staff', 'radiology_technician']) => 'Radiology Dashboard',
             $user->hasAnyRole(['pharmacy_staff', 'pharmacist', 'pharmacy', 'pharmcy']) => 'Pharmacy Management Dashboard',
             $user->hasAnyRole(['patient']) => 'Patient Dashboard',
             default => 'Hospital Dashboard',

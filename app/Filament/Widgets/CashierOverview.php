@@ -16,25 +16,25 @@ class CashierOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $pending = ServiceRequest::query()
-            ->whereIn('payment_status', ['pending', 'verified'])
-            ->count();
-        $urgent = ServiceRequest::query()
-            ->where('payment_status', 'pending')
-            ->where('requested_at', '<', now()->subMinutes(30))
-            ->count();
-        $paidToday = ServiceRequest::query()
-            ->whereDate('paid_at', today())
-            ->where('payment_status', 'paid')
-            ->count();
-        $collectedToday = (float) Payments::query()
-            ->whereDate('payment_date', today())
-            ->whereIn('payment_mode', ['cash', 'card', 'upi', 'netbanking', 'mixed'])
-            ->sum('amount');
-        $insuranceToday = (float) Payments::query()
-            ->whereDate('payment_date', today())
-            ->where('payment_mode', 'insurance')
-            ->sum('amount');
+        $todayStart = today();
+        $todayEnd = $todayStart->copy()->endOfDay();
+        $serviceRequestStats = ServiceRequest::query()
+            ->selectRaw('SUM(CASE WHEN payment_status IN (?, ?) THEN 1 ELSE 0 END) as pending_count', ['pending', 'verified'])
+            ->selectRaw('SUM(CASE WHEN payment_status = ? AND requested_at < ? THEN 1 ELSE 0 END) as urgent_count', ['pending', now()->subMinutes(30)])
+            ->selectRaw('SUM(CASE WHEN payment_status = ? AND paid_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as paid_today_count', ['paid', $todayStart, $todayEnd])
+            ->first();
+
+        $paymentStats = Payments::query()
+            ->whereBetween('payment_date', [$todayStart, $todayEnd])
+            ->selectRaw('SUM(CASE WHEN payment_mode IN (?, ?, ?, ?, ?) THEN amount ELSE 0 END) as collected_total', ['cash', 'card', 'upi', 'netbanking', 'mixed'])
+            ->selectRaw('SUM(CASE WHEN payment_mode = ? THEN amount ELSE 0 END) as insurance_total', ['insurance'])
+            ->first();
+
+        $pending = (int) $serviceRequestStats->pending_count;
+        $urgent = (int) $serviceRequestStats->urgent_count;
+        $paidToday = (int) $serviceRequestStats->paid_today_count;
+        $collectedToday = (float) $paymentStats->collected_total;
+        $insuranceToday = (float) $paymentStats->insurance_total;
 
         return [
             Stat::make('Pending Payments', (string) $pending)

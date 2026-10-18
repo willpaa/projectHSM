@@ -59,7 +59,7 @@
                 </div>
 
                 <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                    <h2 class="text-lg font-semibold text-slate-900">Prescriptions</h2>
+                    <h2 class="text-lg font-semibold text-slate-900">My Prescriptions</h2>
                     <div class="mt-4">
                         <table class="w-full border-collapse border border-gray-200 text-xs">
                             <thead>
@@ -125,6 +125,32 @@
             </div>
 
             <div class="grid gap-6 md:grid-cols-3">
+                <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+                    <h2 class="text-lg font-semibold text-slate-900">My Lab Requests</h2>
+                    <div class="mt-4 overflow-x-auto">
+                        <table class="w-full border-collapse border border-gray-200 text-xs">
+                            <thead>
+                                <tr class="bg-teal-50">
+                                    <th class="border border-gray-200 p-2 text-left font-medium text-teal-800 text-sm">Service</th>
+                                    <th class="border border-gray-200 p-2 text-left font-medium text-teal-800 text-sm">Payment</th>
+                                    <th class="border border-gray-200 p-2 text-left font-medium text-teal-800 text-sm">Requested</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($labRequests as $request)
+                                    <tr class="even:bg-gray-50">
+                                        <td class="border border-gray-200 p-2">{{ $request->service?->name ?? 'Laboratory service' }}</td>
+                                        <td class="border border-gray-200 p-2">{{ ucfirst($request->payment_status ?? 'pending') }}</td>
+                                        <td class="border border-gray-200 p-2">{{ optional($request->requested_at)->format('M d, Y') ?? '-' }}</td>
+                                    </tr>
+                                @empty
+                                    <tr class="even:bg-gray-50"><td colspan="3" class="border border-gray-200 p-2 text-center text-slate-500">No lab requests found.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
                     <h2 class="text-lg font-semibold text-slate-900">Lab Reports</h2>
                     <div class="mt-4">

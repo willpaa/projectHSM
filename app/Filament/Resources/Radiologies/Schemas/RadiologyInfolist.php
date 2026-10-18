@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Radiologies\Schemas;
 
 use App\Support\ClinicalReportAccess;
+use App\Support\ClinicalStaffAccess;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Schemas\Components\Section;
@@ -21,6 +22,7 @@ class RadiologyInfolist
                         TextEntry::make('patient.patient_id')->label('Patient ID'),
                         TextEntry::make('patient.full_name')->label('Patient'),
                         TextEntry::make('doctor.full_name')->label('Doctor')->placeholder('-'),
+                        TextEntry::make('radiologist.full_name')->label('Assigned Technician')->placeholder('Unassigned'),
                         TextEntry::make('exam_name')->placeholder('-'),
                         TextEntry::make('modality')->placeholder('-'),
                         TextEntry::make('exam_date')->date()->placeholder('-'),
@@ -40,7 +42,11 @@ class RadiologyInfolist
                     ->schema([
                         TextEntry::make('result_status')->badge()->placeholder('-'),
                         TextEntry::make('completed_at')->label('Result Date')->dateTime()->placeholder('-'),
-                        TextEntry::make('result_summary')->placeholder('-')->columnSpanFull(),
+                        TextEntry::make('result_summary')
+                            ->label('Result Summary')
+                            ->placeholder('-')
+                            ->prose()
+                            ->columnSpanFull(),
                         TextEntry::make('findings')
                             ->prose()
                             ->columnSpanFull(),
@@ -52,7 +58,9 @@ class RadiologyInfolist
                             ->size(400)
                             ->columnSpanFull(),
                     ])
-                    ->visible(fn ($record): bool => $record->status === 'completed' && ClinicalReportAccess::canViewReport($record)),
+                    ->visible(fn ($record): bool => $record->status === 'completed'
+                        && (ClinicalReportAccess::canViewReport($record)
+                            || ClinicalStaffAccess::canManageRadiology($record))),
             ]);
     }
 }

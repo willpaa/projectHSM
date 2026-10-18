@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Pages\PatientPortal;
+use App\Filament\Resources\Appointments\AppointmentsResource;
 use App\Models\Appointments;
 use App\Models\Patients;
 use App\Models\Payments;
@@ -28,8 +29,8 @@ class RolePatientSelfServiceOverview extends StatsOverviewWidget
         $upcomingCount = $patientId
             ? Appointments::query()
                 ->where('patient_id', $patientId)
-                ->whereDate('date', '>=', today())
-                ->where('status', 'scheduled')
+                ->where('date', '>=', today()->toDateString())
+                ->whereIn('status', ['requested', 'scheduled', 'checked_in', 'in_progress'])
                 ->count()
             : 0;
         $prescriptionsCount = $patientId
@@ -38,13 +39,8 @@ class RolePatientSelfServiceOverview extends StatsOverviewWidget
         $outstandingAmount = $patientId
             ? ServiceRequest::query()
                 ->where('patient_id', $patientId)
-                ->get(['patient_share', 'discount', 'paid_amount'])
-                ->sum(fn (ServiceRequest $request): float => max(
-                    0,
-                    (float) $request->patient_share
-                        - (float) $request->discount
-                        - (float) $request->paid_amount,
-                ))
+                ->selectRaw('COALESCE(SUM(GREATEST(patient_share - discount - paid_amount, 0)), 0) as outstanding_amount')
+                ->value('outstanding_amount')
             : 0.0;
         $paymentsCount = $patientId
             ? Payments::query()->where('patient_id', $patientId)->count()
@@ -54,7 +50,7 @@ class RolePatientSelfServiceOverview extends StatsOverviewWidget
             Stat::make('My Appointments', (string) $appointmentsCount)
                 ->description('All my bookings')
                 ->icon('heroicon-o-calendar-days')
-                ->url(PatientPortal::getUrl())
+                ->url(AppointmentsResource::getUrl('index'))
                 ->extraAttributes($this->cardStyle('#1D4ED8')),
             Stat::make('Upcoming', (string) $upcomingCount)
                 ->description('Scheduled from today')
@@ -66,7 +62,7 @@ class RolePatientSelfServiceOverview extends StatsOverviewWidget
                 ->icon('heroicon-o-document-text')
                 ->url(PatientPortal::getUrl())
                 ->extraAttributes($this->cardStyle('#7C3AED')),
-            Stat::make('Outstanding Bill', '$' . number_format($outstandingAmount, 2))
+            Stat::make('Outstanding Bill', 'ETB ' . number_format($outstandingAmount, 2))
                 ->description('My balance due')
                 ->icon('heroicon-o-exclamation-triangle')
                 ->url(PatientPortal::getUrl())

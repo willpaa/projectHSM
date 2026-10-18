@@ -16,7 +16,7 @@ class InsuranceForm
                 TextInput::make('policy_id')
                     ->required(),
                 Select::make('patient_id')
-                    ->relationship('patient', 'id')
+                    ->relationship('patient', 'full_name')
                     ->required(),
                 TextInput::make('provider_name')
                     ->required(),

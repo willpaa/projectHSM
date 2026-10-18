@@ -6,9 +6,12 @@ namespace App\Models;
 use Filament\Models\Contracts\HasAvatar;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Exceptions\GuardDoesNotExist;
 use Spatie\Permission\Exceptions\RoleDoesNotExist;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -62,6 +65,11 @@ class User extends Authenticatable implements HasAvatar
         return $this->hasMany(Doctors::class);
     }
 
+    public function staffProfile(): HasOne
+    {
+        return $this->hasOne(Staff::class, 'user_id');
+    }
+
     public function getFilamentAvatarUrl(): ?string
     {
         return filled($this->avatar_url)
@@ -71,9 +79,15 @@ class User extends Authenticatable implements HasAvatar
 
     public static function usersByRoleName(string $roleName, string $guard = 'web')
     {
+        $roleTable = config('permission.table_names.roles', 'roles');
+
+        if (! Schema::hasTable($roleTable)) {
+            return collect();
+        }
+
         try {
             return static::role($roleName, $guard)->get();
-        } catch (RoleDoesNotExist) {
+        } catch (RoleDoesNotExist|GuardDoesNotExist|\Throwable) {
             return collect();
         }
     }

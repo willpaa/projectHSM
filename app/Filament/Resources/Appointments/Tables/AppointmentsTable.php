@@ -2,10 +2,13 @@
 
 namespace App\Filament\Resources\Appointments\Tables;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
+use App\Models\Appointments;
+use App\Services\AppointmentSchedulingService;
+use App\Support\PatientPortal;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class AppointmentsTable
@@ -15,44 +18,127 @@ class AppointmentsTable
         return $table
             ->columns([
                 TextColumn::make('appointment_id')
-                    ->searchable(),
-                TextColumn::make('patient.id')
-                    ->searchable(),
-                TextColumn::make('doctor.id')
-                    ->searchable(),
+                    ->label('Appointment ID')
+                    ->searchable()
+                    ->copyable(),
+                TextColumn::make('patient.full_name')
+                    ->label('Patient')
+                    ->description(fn (Appointments $record): ?string => $record->patient?->patient_id)
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('doctor.full_name')
+                    ->label('Doctor')
+                    ->description(fn (Appointments $record): ?string => $record->doctor?->specialization)
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('date')
                     ->date()
                     ->sortable(),
-                TextColumn::make('time')
-                    ->time()
-                    ->sortable(),
-                TextColumn::make('visit_type')
-                    ->badge(),
                 TextColumn::make('token_no')
-                    ->searchable(),
-                TextColumn::make('status')
+                    ->label('Queue token')
+                    ->placeholder('Not checked in')
+                    ->toggleable(),
+                TextColumn::make('time')
+                    ->time('g:i A')
+                    ->sortable(),
+                TextColumn::make('duration_minutes')
+                    ->label('Length')
+                    ->formatStateUsing(fn (int $state): string => "{$state} min"),
+                TextColumn::make('visit_type')
+                    ->label('Visit')
                     ->badge(),
-                TextColumn::make('created_by')
-                    ->searchable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('status')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => str($state)->replace('_', ' ')->title()->toString())
+                    ->color(fn (string $state): string => match ($state) {
+                        'requested', 'scheduled' => 'warning',
+                        'checked_in', 'in_progress' => 'info',
+                        'completed' => 'success',
+                        'cancelled', 'no_show' => 'gray',
+                        default => 'gray',
+                    }),
             ])
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->options([
+                        'requested' => 'Requested',
+                        'scheduled' => 'Scheduled',
+                        'checked_in' => 'Checked in',
+                        'in_progress' => 'In progress',
+                        'completed' => 'Completed',
+                        'cancelled' => 'Cancelled',
+                        'no_show' => 'No show',
+                    ]),
+                SelectFilter::make('visit_type')
+                    ->label('Visit type')
+                    ->options(['OPD' => 'Outpatient (OPD)', 'IPD' => 'Inpatient (IPD)']),
             ])
             ->recordActions([
-                EditAction::make(),
+                Action::make('confirm')
+                    ->label('Confirm')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->visible(fn (Appointments $record): bool => $record->status === 'requested'
+                        && (bool) auth()->user()?->can('Update:Appointments'))
+                    ->action(function (Appointments $record, AppointmentSchedulingService $scheduler): void {
+                        $scheduler->transition($record, 'scheduled');
+                    })
+                    ->successNotificationTitle('Appointment confirmed'),
+                Action::make('check_in')
+                    ->label('Check in')
+                    ->icon('heroicon-o-clipboard-document-check')
+                    ->visible(fn (Appointments $record): bool => $record->status === 'scheduled'
+                        && (bool) auth()->user()?->can('Update:Appointments'))
+                    ->action(function (Appointments $record, AppointmentSchedulingService $scheduler): void {
+                        $scheduler->transition($record, 'checked_in');
+                    })
+                    ->successNotificationTitle('Patient checked in'),
+                Action::make('start_visit')
+                    ->label('Start visit')
+                    ->icon('heroicon-o-play')
+                    ->visible(fn (Appointments $record): bool => $record->status === 'checked_in'
+                        && (bool) auth()->user()?->can('Update:Appointments'))
+                    ->action(function (Appointments $record, AppointmentSchedulingService $scheduler): void {
+                        $scheduler->transition($record, 'in_progress');
+                    })
+                    ->successNotificationTitle('Visit started'),
+                Action::make('complete')
+                    ->label('Complete')
+                    ->icon('heroicon-o-check')
+                    ->color('success')
+                    ->visible(fn (Appointments $record): bool => $record->status === 'in_progress'
+                        && (bool) auth()->user()?->can('Update:Appointments'))
+                    ->action(function (Appointments $record, AppointmentSchedulingService $scheduler): void {
+                        $scheduler->transition($record, 'completed');
+                    })
+                    ->successNotificationTitle('Appointment completed'),
+                Action::make('no_show')
+                    ->label('No show')
+                    ->icon('heroicon-o-user-minus')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->visible(fn (Appointments $record): bool => $record->status === 'scheduled'
+                        && (bool) auth()->user()?->can('Update:Appointments'))
+                    ->action(function (Appointments $record, AppointmentSchedulingService $scheduler): void {
+                        $scheduler->transition($record, 'no_show');
+                    })
+                    ->successNotificationTitle('Appointment marked as no-show'),
+                Action::make('cancel')
+                    ->label('Cancel')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn (Appointments $record): bool => in_array($record->status, ['requested', 'scheduled', 'checked_in'], true)
+                        && ((bool) auth()->user()?->can('Update:Appointments')
+                            || (PatientPortal::isPatientUser() && (int) $record->patient_id === (int) PatientPortal::currentPatientId())))
+                    ->action(function (Appointments $record, AppointmentSchedulingService $scheduler): void {
+                        $scheduler->transition($record, 'cancelled');
+                    })
+                    ->successNotificationTitle('Appointment cancelled'),
+                EditAction::make()
+                    ->visible(fn (): bool => (bool) auth()->user()?->can('Update:Appointments')),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->defaultSort('date')
+            ->paginated([10, 25, 50]);
     }
 }

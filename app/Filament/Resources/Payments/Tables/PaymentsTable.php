@@ -156,7 +156,7 @@ class PaymentsTable
             
             Filter::make('today')
                 ->label('Today')
-                ->query(fn(Builder $query): Builder => $query->whereDate('payment_date', today()))
+                ->query(fn (Builder $query): Builder => $query->whereBetween('payment_date', [today(), today()->copy()->endOfDay()]))
                 ->default(false),
             
             Filter::make('this_week')
@@ -165,7 +165,7 @@ class PaymentsTable
             
             Filter::make('this_month')
                 ->label('This Month')
-                ->query(fn(Builder $query): Builder => $query->whereMonth('payment_date', now()->month)),
+                ->query(fn (Builder $query): Builder => $query->whereBetween('payment_date', [now()->startOfMonth(), now()->copy()->endOfMonth()])),
         
                 //
             ])

@@ -26,7 +26,7 @@ class PaymentCompleted implements ShouldBroadcast
     {
         $this->payment = $payment;
         $this->serviceRequest = $payment->serviceRequest;
-        $this->message = "Payment completed: {$payment->invoice_number} - Amount: \${$payment->amount}";
+        $this->message = "Payment completed: {$payment->invoice_number} - Amount: ETB {$payment->amount}";
     }
     
     /**

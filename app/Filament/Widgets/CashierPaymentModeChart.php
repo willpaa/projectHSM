@@ -17,8 +17,10 @@ class CashierPaymentModeChart extends ChartWidget
 
     protected function getData(): array
     {
+        $todayStart = today();
+
         $totals = Payments::query()
-            ->whereDate('payment_date', today())
+            ->whereBetween('payment_date', [$todayStart, $todayStart->copy()->endOfDay()])
             ->selectRaw('payment_mode, SUM(amount) as total')
             ->groupBy('payment_mode')
             ->pluck('total', 'payment_mode')

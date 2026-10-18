@@ -41,6 +41,20 @@ class RolePharmacyReportOverview extends StatsOverviewWidget
                 ->icon('heroicon-o-clipboard-document-check')
                 ->color('warning')
                 ->url($reportUrl),
+            Stat::make('Gross Profit', 'ETB ' . number_format($summary['profit_value'], 2))
+                ->description($summary['sales_value'] > 0
+                    ? 'Margin ' . number_format(($summary['profit_value'] / $summary['sales_value']) * 100, 1) . '% — COGS ' . number_format($summary['cogs_value'], 2)
+                    : 'Cost of goods from dispensed batches')
+                ->icon('heroicon-o-arrow-trending-up')
+                ->color($summary['profit_value'] >= 0 ? 'success' : 'danger')
+                ->url($reportUrl),
+            Stat::make('Stock Value', 'ETB ' . number_format($summary['stock_value'], 2))
+                ->description(number_format($summary['stock_quantity']) . ' units on hand' . ($summary['expired_stock_value'] > 0
+                    ? ' — ' . number_format($summary['expired_stock_value'], 2) . ' expired'
+                    : ' (batch valuation)'))
+                ->icon('heroicon-o-cube')
+                ->color($summary['expired_stock_value'] > 0 ? 'danger' : 'info')
+                ->url($reportUrl),
             Stat::make('Top Medicine', $topMedicine?->medicine_name ?? 'No sales yet')
                 ->description($topMedicine
                     ? number_format((int) $topMedicine->total_quantity) . ' units sold this month'
@@ -56,7 +70,7 @@ class RolePharmacyReportOverview extends StatsOverviewWidget
         return [
             'default' => 1,
             'sm' => 2,
-            'xl' => 4,
+            'xl' => 3,
         ];
     }
 

@@ -2,9 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Models\Payments;
+use App\Services\FinanceReportService;
 use Filament\Pages\Page;
-use Illuminate\Support\Collection;
 
 class FinanceReport extends Page
 {
@@ -21,6 +20,18 @@ class FinanceReport extends Page
     public ?string $startDate = null;
 
     public ?string $endDate = null;
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->hasAnyRole([
+            'admin',
+            'super_admin',
+            'cashier',
+            'casher',
+            'billing_staff',
+            'accountant',
+        ]) ?? false;
+    }
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -42,41 +53,19 @@ class FinanceReport extends Page
 
     public function getViewData(): array
     {
-        $payments = Payments::query()
-            ->with(['patient', 'serviceRequest.service', 'collector'])
-            ->whereBetween('payment_date', [
-                $this->startDate . ' 00:00:00',
-                $this->endDate . ' 23:59:59',
-            ])
-            ->latest('payment_date')
-            ->get();
-
-        $cashPayments = $payments->where('payment_mode', '!=', 'insurance');
-        $insurancePayments = $payments->where('payment_mode', 'insurance');
+        $payments = FinanceReportService::payments($this->startDate, $this->endDate);
 
         return [
             'startDate' => $this->startDate,
             'endDate' => $this->endDate,
             'payments' => $payments,
-            'summary' => [
-                'total' => (float) $payments->sum('amount'),
-                'collected' => (float) $cashPayments->sum('amount'),
-                'insurance' => (float) $insurancePayments->sum('amount'),
-                'transactions' => $payments->count(),
-            ],
-            'byMode' => $this->groupPayments($payments, fn (Payments $payment): string => ucfirst((string) $payment->payment_mode)),
-            'byService' => $this->groupPayments($payments, fn (Payments $payment): string => $payment->serviceRequest?->service?->name ?? 'Unknown service'),
+            'summary' => FinanceReportService::summary($payments),
+            'byMode' => FinanceReportService::byPaymentMode($payments),
+            'byService' => FinanceReportService::byService($payments),
+            'csvUrl' => route('finance-reports.export.csv', ['start_date' => $this->startDate, 'end_date' => $this->endDate]),
+            'excelUrl' => route('finance-reports.export.excel', ['start_date' => $this->startDate, 'end_date' => $this->endDate]),
+            'pdfUrl' => route('finance-reports.export.pdf', ['start_date' => $this->startDate, 'end_date' => $this->endDate]),
         ];
     }
 
-    private function groupPayments(Collection $payments, callable $label): Collection
-    {
-        return $payments
-            ->groupBy($label)
-            ->map(fn (Collection $group): array => [
-                'count' => $group->count(),
-                'amount' => (float) $group->sum('amount'),
-            ])
-            ->sortByDesc('amount');
-    }
 }

@@ -4,13 +4,63 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\ScopesPatientRecords;
+use App\Services\PatientHistoryRecorder;
 
 class Laboratory extends Model
 {
+    use ScopesPatientRecords;
+
+    protected static function booted(): void
+    {
+        static::created(function (self $lab): void {
+            PatientHistoryRecorder::record(
+                $lab->patient_id ? (int) $lab->patient_id : null,
+                'laboratory',
+                'Laboratory test ordered',
+                implode(' | ', array_filter([
+                    'Test: ' . $lab->test_name,
+                    'Status: ' . $lab->status,
+                    filled($lab->test_type) ? 'Type: ' . $lab->test_type : null,
+                ])),
+                $lab->encounter_id ?: $lab->lab_id,
+            );
+        });
+
+        static::updated(function (self $lab): void {
+            if (! $lab->wasChanged([
+                'status',
+                'result_status',
+                'result_value',
+                'result_data',
+                'result_date',
+                'notes',
+            ])) {
+                return;
+            }
+
+            PatientHistoryRecorder::record(
+                $lab->patient_id ? (int) $lab->patient_id : null,
+                'laboratory',
+                'Laboratory result updated',
+                implode(' | ', array_filter([
+                    'Test: ' . $lab->test_name,
+                    'Status: ' . $lab->status,
+                    'Result status: ' . $lab->result_status,
+                    filled($lab->result_value) ? 'Result: ' . $lab->result_value : null,
+                    filled($lab->result_data) ? 'Structured result: ' . json_encode($lab->result_data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+                    filled($lab->notes) ? 'Notes: ' . $lab->notes : null,
+                ])),
+                $lab->encounter_id ?: $lab->lab_id,
+            );
+        });
+    }
+
     protected $fillable = [
         'lab_id',
         'patient_id',
         'doctor_id',
+        'laboratorist_id',
         'service_request_id',
         'encounter_type',
         'encounter_id',
@@ -45,6 +95,11 @@ class Laboratory extends Model
     public function doctor(): BelongsTo
     {
         return $this->belongsTo(Doctors::class, 'doctor_id');
+    }
+
+    public function laboratorist(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class, 'laboratorist_id');
     }
 
     public function serviceRequest(): BelongsTo

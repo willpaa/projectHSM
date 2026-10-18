@@ -9,6 +9,15 @@ class PharmacyReportPrintController extends Controller
 {
     public function __invoke(): View
     {
+        abort_unless(request()->user()?->hasAnyRole([
+            'admin',
+            'super_admin',
+            'pharmacy_staff',
+            'pharmacist',
+            'pharmacy',
+            'pharmcy',
+        ]), 403);
+
         $startDate = request('start_date');
         $endDate = request('end_date');
         $report = PharmacyReportService::build($startDate, $endDate);

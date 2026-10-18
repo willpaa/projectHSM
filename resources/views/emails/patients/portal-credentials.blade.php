@@ -25,7 +25,8 @@
                 <p style="margin:0 0 12px; font-size:14px;"><strong>Portal URL:</strong> {{ url('/admin/login') }}</p>
                 <p style="margin:0 0 12px; font-size:14px;"><strong>Email:</strong> {{ $user->email }}</p>
                 <p style="margin:0 0 12px; font-size:14px;"><strong>Temporary Password:</strong> {{ $plainTextPassword }}</p>
-                <p style="margin:0; font-size:14px;"><strong>Patient ID:</strong> {{ $patient->patient_id }}</p>
+                <p style="margin:0 0 12px; font-size:14px;"><strong>Patient Code:</strong> {{ $patient->patient_id }}</p>
+                <p style="margin:0; font-size:14px;"><strong>MRN:</strong> {{ $patient->mrn }}</p>
             </div>
 
             <p style="font-size:15px; line-height:1.7;">

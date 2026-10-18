@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Inventory;
 use App\Models\InventoryTransaction;
+use App\Models\PharmacyBatch;
 use App\Models\PharmacySale;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class PharmacyReportService
@@ -13,37 +14,49 @@ class PharmacyReportService
     public static function build(?string $startDate = null, ?string $endDate = null): array
     {
         [$start, $end] = static::resolveRange($startDate, $endDate);
+        $transactionsTable = (new InventoryTransaction())->getTable();
+        $inventoryTable = (new Inventory())->getTable();
 
         $transactionsQuery = InventoryTransaction::query()
             ->with('inventory')
-            ->whereBetween('created_at', [$start, $end]);
+            ->whereBetween($transactionsTable . '.created_at', [$start, $end]);
 
         $salesQuery = PharmacySale::query()
             ->with(['patient', 'seller'])
             ->whereBetween('sold_at', [$start, $end]);
 
-        $purchaseQty = (int) (clone $transactionsQuery)
-            ->where('operation_type', 'purchase')
-            ->sum('quantity');
+        $transactionSummary = (clone $transactionsQuery)
+            ->setEagerLoads([])
+            ->leftJoin($inventoryTable . ' as report_inventory', 'report_inventory.item_id', '=', $transactionsTable . '.inventory_id')
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN ' . $transactionsTable . '.operation_type = ? THEN ' . $transactionsTable . '.quantity ELSE 0 END), 0) as purchase_qty',
+                ['purchase'],
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN ' . $transactionsTable . '.operation_type = ? THEN ABS(' . $transactionsTable . '.quantity * report_inventory.purchase_price) ELSE 0 END), 0) as purchase_value',
+                ['purchase'],
+            )
+            ->selectRaw(
+                'ABS(COALESCE(SUM(CASE WHEN ' . $transactionsTable . '.operation_type = ? THEN ' . $transactionsTable . '.quantity ELSE 0 END), 0)) as dispense_qty',
+                ['dispense'],
+            )
+            ->first();
 
-        $purchaseValue = (float) (clone $transactionsQuery)
-            ->where('operation_type', 'purchase')
-            ->get()
-            ->sum(fn (InventoryTransaction $transaction): float => abs((float) ($transaction->inventory?->purchase_price ?? 0) * (int) $transaction->quantity));
+        $salesSummary = (clone $salesQuery)
+            ->setEagerLoads([])
+            ->selectRaw('COALESCE(SUM(CASE WHEN sale_type = ? THEN quantity ELSE 0 END), 0) as direct_sale_qty', ['direct_sale'])
+            ->selectRaw('COALESCE(SUM(CASE WHEN sale_type = ? THEN quantity ELSE 0 END), 0) as prescription_sale_qty', ['prescription'])
+            ->selectRaw('COALESCE(SUM(total_amount), 0) as sales_value')
+            ->first();
 
-        $dispenseQty = (int) abs((int) (clone $transactionsQuery)
-            ->where('operation_type', 'dispense')
-            ->sum('quantity'));
+        $profitSummary = (clone $salesQuery)
+            ->setEagerLoads([])
+            ->selectRaw('COALESCE(SUM(cogs_amount), 0) as cogs_value')
+            ->selectRaw('COALESCE(SUM(profit_amount), 0) as profit_value')
+            ->selectRaw('COALESCE(SUM(CASE WHEN cogs_amount = 0 THEN total_amount ELSE 0 END), 0) as unallocated_value')
+            ->first();
 
-        $directSaleQty = (int) (clone $salesQuery)
-            ->where('sale_type', 'direct_sale')
-            ->sum('quantity');
-
-        $prescriptionSaleQty = (int) (clone $salesQuery)
-            ->where('sale_type', 'prescription')
-            ->sum('quantity');
-
-        $salesValue = (float) (clone $salesQuery)->sum('total_amount');
+        $stockValuation = static::stockValuation();
 
         $recentTransactions = (clone $transactionsQuery)
             ->latest()
@@ -66,16 +79,71 @@ class PharmacyReportService
             'start' => $start,
             'end' => $end,
             'summary' => [
-                'purchase_qty' => $purchaseQty,
-                'purchase_value' => $purchaseValue,
-                'direct_sale_qty' => $directSaleQty,
-                'prescription_sale_qty' => $prescriptionSaleQty,
-                'dispense_qty' => $dispenseQty,
-                'sales_value' => $salesValue,
+                'purchase_qty' => (int) $transactionSummary->purchase_qty,
+                'purchase_value' => (float) $transactionSummary->purchase_value,
+                'direct_sale_qty' => (int) $salesSummary->direct_sale_qty,
+                'prescription_sale_qty' => (int) $salesSummary->prescription_sale_qty,
+                'dispense_qty' => (int) $transactionSummary->dispense_qty,
+                'sales_value' => (float) $salesSummary->sales_value,
+                'cogs_value' => (float) $profitSummary->cogs_value,
+                'profit_value' => (float) $profitSummary->profit_value,
+                'unallocated_value' => (float) $profitSummary->unallocated_value,
+                'stock_quantity' => $stockValuation['quantity'],
+                'stock_value' => $stockValuation['value'],
+                'expired_stock_value' => $stockValuation['expired_value'],
             ],
+            'stock_valuation_items' => $stockValuation['items'],
             'recent_transactions' => $recentTransactions,
             'recent_sales' => $recentSales,
             'top_medicines' => $topMedicines,
+        ];
+    }
+
+    /**
+     * Current inventory value, valued at each batch's actual purchase price
+     * (FIFO/batch valuation). Also reports expired stock still sitting on shelves.
+     *
+     * @return array{quantity: int, value: float, expired_value: float, items: Collection}
+     */
+    public static function stockValuation(): array
+    {
+        $batches = PharmacyBatch::query()
+            ->with('inventoryItem')
+            ->where('quantity_remaining', '>', 0)
+            ->get();
+
+        $value = 0.0;
+        $expiredValue = 0.0;
+        $quantity = 0;
+        $items = collect();
+
+        foreach ($batches as $batch) {
+            $lineValue = (int) $batch->quantity_remaining * (float) $batch->purchase_price;
+            $value += $lineValue;
+            $quantity += (int) $batch->quantity_remaining;
+
+            $isExpired = $batch->expiry_date !== null && $batch->expiry_date->lt(today());
+            if ($isExpired) {
+                $expiredValue += $lineValue;
+            }
+
+            $items->push([
+                'item_id' => $batch->inventory_item_id,
+                'item_name' => $batch->inventoryItem?->item_name,
+                'batch_no' => $batch->batch_no,
+                'expiry_date' => $batch->expiry_date?->toDateString(),
+                'quantity_remaining' => (int) $batch->quantity_remaining,
+                'unit_cost' => (float) $batch->purchase_price,
+                'line_value' => round($lineValue, 2),
+                'expired' => $isExpired,
+            ]);
+        }
+
+        return [
+            'quantity' => $quantity,
+            'value' => round($value, 2),
+            'expired_value' => round($expiredValue, 2),
+            'items' => $items->sortByDesc('line_value')->values(),
         ];
     }
 

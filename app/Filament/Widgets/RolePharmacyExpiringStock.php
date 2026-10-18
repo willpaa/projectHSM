@@ -24,7 +24,7 @@ class RolePharmacyExpiringStock extends TableWidget
                 ->with('inventoryItem')
                 ->where('quantity_remaining', '>', 0)
                 ->whereNotNull('expiry_date')
-                ->whereDate('expiry_date', '<=', today()->copy()->addDays(30))
+                ->where('expiry_date', '<=', today()->copy()->addDays(30)->toDateString())
                 ->orderBy('expiry_date')
                 ->limit(8))
             ->columns([

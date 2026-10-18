@@ -23,7 +23,7 @@ class InsuranceClaimSubmitted implements ShouldBroadcast
     public function __construct(ServiceRequest $serviceRequest)
     {
         $this->serviceRequest = $serviceRequest;
-        $this->message = "Insurance claim submitted for {$serviceRequest->patient->full_name} - Amount: \${$serviceRequest->insurance_share}";
+        $this->message = "Insurance claim submitted for {$serviceRequest->patient->full_name} - Amount: ETB {$serviceRequest->insurance_share}";
     }
     
     /**

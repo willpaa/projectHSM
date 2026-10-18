@@ -262,12 +262,14 @@ class OPDSTable
                             ->options(fn (): array => Staff::query()
                                 ->where('role', 'lab_technician')
                                 ->where('status', 'active')
+                                ->whereNotNull('user_id')
                                 ->orderBy('full_name')
                                 ->pluck('full_name', 'id')
                                 ->all())
                             ->searchable()
                             ->preload()
-                            ->placeholder('Assign a laboratorist (optional)'),
+                            ->placeholder('Assign a laboratorist')
+                            ->required(),
                     ])
                     ->action(function (OPD $record, array $data): void {
                         $pendingLabExists = Laboratory::query()
@@ -307,18 +309,15 @@ class OPDSTable
                             'cost' => $service?->price ?? 0,
                         ]);
 
-                        $labUsers = User::usersByRoleName('lab_technician');
-                        if ($labUsers->isNotEmpty()) {
+                        if ($assignedLaboratorist?->user) {
                             $body = "OPD patient {$record->patient?->full_name} sent to Lab.";
-                            if ($assignedLaboratorist) {
-                                $body .= " Assigned laboratorist: {$assignedLaboratorist->full_name}.";
-                            }
+                            $body .= " Assigned laboratorist: {$assignedLaboratorist->full_name}.";
 
                             Notification::make()
                                 ->title('New Laboratory Queue')
                                 ->body($body)
                                 ->icon('heroicon-o-bell-alert')
-                                ->sendToDatabase($labUsers);
+                                ->sendToDatabase(collect([$assignedLaboratorist->user]));
                         }
 
                         Notification::make()
@@ -370,6 +369,17 @@ class OPDSTable
                             )
                             ->searchable()
                             ->required(),
+                        Select::make('radiologist_id')
+                            ->label('Radiology Technician')
+                            ->options(fn (): array => Staff::query()
+                                ->where('role', 'radiology_technician')
+                                ->where('status', 'active')
+                                ->whereNotNull('user_id')
+                                ->orderBy('full_name')
+                                ->pluck('full_name', 'id')
+                                ->all())
+                            ->searchable()
+                            ->required(),
                         Textarea::make('exam_name')
                             ->label('Exam')
                             ->default('OPD Requested Imaging')
@@ -379,10 +389,12 @@ class OPDSTable
                     
                     ->action(function (OPD $record, array $data): void {
                         $radiologyId = 'RAD-' . now()->format('Ymd') . '-' . Str::upper(Str::random(5));
+                        $assignedRadiologist = Staff::query()->with('user')->find($data['radiologist_id']);
                         Radiology::create([
                             'radiology_id' => $radiologyId,
                             'patient_id' => $record->patient_id,
                             'doctor_id' => $data['doctor_id'],
+                            'radiologist_id' => $data['radiologist_id'],
                             'encounter_type' => 'OPD',
                             'encounter_id' => $record->encounter_id,
                             'exam_name' => $data['exam_name'],
@@ -394,13 +406,12 @@ class OPDSTable
 
                         
 
-                        $radiologyUsers = User::usersByRoleName('radiology_technician');
-                        if ($radiologyUsers->isNotEmpty()) {
+                        if ($assignedRadiologist?->user) {
                             Notification::make()
                                 ->title('New Radiology Queue')
-                                ->body("OPD patient {$record->patient?->full_name} sent to Radiology.")
+                                ->body("OPD patient {$record->patient?->full_name} assigned to {$assignedRadiologist->full_name}.")
                                 ->icon('heroicon-o-bell-alert')
-                                ->sendToDatabase($radiologyUsers);
+                                ->sendToDatabase(collect([$assignedRadiologist->user]));
                         }
 
                         Notification::make()

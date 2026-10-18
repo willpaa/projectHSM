@@ -5,9 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Concerns\ScopesPatientRecords;
 
 class Pharmacy extends Model
 {
+    use ScopesPatientRecords;
+
+    protected static function patientOwnershipColumn(): string
+    {
+        return 'issued_to_patient_id';
+    }
     protected $fillable = [
         'medicine_id',
         'inventory_item_id',

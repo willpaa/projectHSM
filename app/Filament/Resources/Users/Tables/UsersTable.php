@@ -10,8 +10,11 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Actions\Action;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class UsersTable
 {
@@ -44,6 +47,21 @@ class UsersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                Filter::make('name')
+                    ->label('Name')
+                    ->form([TextInput::make('name')->label('Name')])
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        filled($data['name'] ?? null),
+                        fn (Builder $query): Builder => $query->where('name', 'like', '%' . trim($data['name']) . '%'),
+                    )),
+                Filter::make('email')
+                    ->label('Email')
+                    ->form([TextInput::make('email')->label('Email address')])
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        filled($data['email'] ?? null),
+                        fn (Builder $query): Builder => $query->where('email', 'like', '%' . trim($data['email']) . '%'),
+                    )),
+                TableFilters::relationship('roles', 'name', 'Role'),
                 TableFilters::dateRange('email_verified_at', 'Verified Date'),
                 TableFilters::createdAt(),
             ], layout: FiltersLayout::AboveContentCollapsible)

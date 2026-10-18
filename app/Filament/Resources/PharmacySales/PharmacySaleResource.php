@@ -17,12 +17,11 @@ class PharmacySaleResource extends Resource
 {
     protected static ?string $model = PharmacySale::class;
 
-    protected static ?string $navigationParentItem = 'Pharmacy Management';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-receipt-percent';
 
     protected static ?string $recordTitleAttribute = 'sale_id';
-
+  protected static ?string $navigationParentItem = 'Pharmacy Management';
     public static function infolist(Schema $schema): Schema
     {
         return PharmacySaleInfolist::configure($schema);

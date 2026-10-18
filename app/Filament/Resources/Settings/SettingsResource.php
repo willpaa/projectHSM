@@ -18,7 +18,6 @@ class SettingsResource extends Resource
 {
     protected static ?string $model = Settings::class;
 
-    protected static ?string $navigationParentItem = 'Pharmacy Management';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 

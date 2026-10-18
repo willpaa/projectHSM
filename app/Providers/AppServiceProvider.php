@@ -20,6 +20,7 @@ use App\Models\Reports;
 use App\Models\ServiceRequest;
 use App\Models\Staff;
 use App\Models\Triage;
+use App\Services\PatientIdentifierGenerator;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Illuminate\Support\Facades\Schema;
@@ -60,7 +61,6 @@ class AppServiceProvider extends ServiceProvider
     private function registerAutomaticIdentifiers(): void
     {
         $identifiers = [
-            Patients::class => ['patient_id' => 'PAT', 'mrn' => 'MRN'],
             Appointments::class => ['appointment_id' => 'APT'],
             Department::class => ['department_id' => 'DEPT'],
             Doctors::class => ['doctor_id' => 'DOC'],
@@ -93,5 +93,16 @@ class AppServiceProvider extends ServiceProvider
                 }
             });
         }
+
+        Patients::creating(function (Patients $patient): void {
+            if (filled($patient->patient_id) && filled($patient->mrn)) {
+                return;
+            }
+
+            $identifiers = app(PatientIdentifierGenerator::class)->next();
+
+            $patient->patient_id = $patient->patient_id ?: $identifiers['patient_id'];
+            $patient->mrn = $patient->mrn ?: $identifiers['mrn'];
+        });
     }
 }

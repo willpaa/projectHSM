@@ -24,7 +24,7 @@ class PaymentRequested implements ShouldBroadcast
     public function __construct(ServiceRequest $serviceRequest)
     {
         $this->serviceRequest = $serviceRequest;
-        $this->message = "Payment request created for {$serviceRequest->patient->full_name} - Amount: \${$serviceRequest->patient_share}";
+        $this->message = "Payment request created for {$serviceRequest->patient->full_name} - Amount: ETB {$serviceRequest->patient_share}";
     }
     
     /**

@@ -15,7 +15,7 @@ use Illuminate\Validation\Rules\Email;
 
 class StaffTable
 {
-    public static function configure(Table $table): Table
+    public static function configure(Table $table, ?string $fixedRole = null): Table
     {
         return $table
             ->columns([
@@ -26,6 +26,9 @@ class StaffTable
                     ->searchable(),
                 TextColumn::make('full_name')
                     ->searchable(),
+                TextColumn::make('user.name')
+                    ->label('Login Account')
+                    ->placeholder('Not linked'),
                 TextColumn::make('role')
                     ->searchable(),
                 TextColumn::make('department')
@@ -55,15 +58,16 @@ class StaffTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                TableFilters::select('role', [
+                TableFilters::select('role', $fixedRole === null ? [
                     'receptionist' => 'Receptionist',
                     'doctor' => 'Doctor',
                     'nurse' => 'Nurse',
                     'lab_technician' => 'Lab Technician',
+                    'radiology_technician' => 'Radiology Technician',
                     'pharmacist' => 'Pharmacist',
                     'accountant' => 'Accountant',
                     'admin' => 'Admin',
-                ]),
+                ] : [$fixedRole => $fixedRole === 'lab_technician' ? 'Lab Technician' : 'Radiology Technician']),
                 TableFilters::select('shift', [
                     'day' => 'Day',
                     'night' => 'Night',

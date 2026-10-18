@@ -24,7 +24,7 @@ class ClinicalReportAccess
         }
 
         return Doctors::query()
-            ->where('email', $user->email)
+            ->whereRaw('LOWER(TRIM(email)) = ?', [strtolower(trim((string) $user->email))])
             ->value('id');
     }
 

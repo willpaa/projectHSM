@@ -18,6 +18,10 @@ class StaffResource extends Resource
 {
     protected static ?string $model = Staff::class;
 
+    protected static ?string $navigationParentItem = 'Staff Management';
+
+    protected static ?string $navigationLabel = 'All Staff';
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-identification';
 
     protected static ?string $recordTitleAttribute = 'id';

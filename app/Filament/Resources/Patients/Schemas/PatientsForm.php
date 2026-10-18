@@ -21,10 +21,14 @@ class PatientsForm
                     ->schema([
                         TextInput::make('patient_id')
                             ->label('Patient Code')
-                            ->required(),
+                            ->disabled()
+                            ->dehydrated()
+                            ->placeholder('Generated automatically'),
                         TextInput::make('mrn')
                             ->label('MRN')
-                            ->required(),
+                            ->disabled()
+                            ->dehydrated()
+                            ->placeholder('Generated automatically'),
                         TextInput::make('full_name')
                             ->label('Full Name')
                             ->required(),
@@ -36,6 +40,7 @@ class PatientsForm
                         Select::make('status')
                             ->options([
                                 'active' => 'Active',
+                                'today' => 'Today',
                                 'inactive' => 'Inactive',
                                 'deceased' => 'Deceased',
                             ])

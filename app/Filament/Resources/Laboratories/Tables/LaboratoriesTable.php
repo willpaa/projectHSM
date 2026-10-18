@@ -10,7 +10,10 @@ use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
 use App\Support\ClinicalReportAccess;
+use App\Support\ClinicalStaffAccess;
+use App\Support\ClinicalResultNotifier;
 use App\Support\PublicStorageUrl;
+use App\Support\PatientPortal;
 use App\Support\ServiceRequestNotifier;
 use Filament\Actions\Action;
 use Filament\Forms\Components\KeyValue;
@@ -42,14 +45,16 @@ class LaboratoriesTable
                     ->label('Arrival')
                     ->state(fn (Laboratory $record): string => $record->created_at?->isToday() ? 'New Today' : 'Old')
                     ->badge()
-                    ->color(fn (string $state): string => $state === 'New Today' ? 'success' : 'gray'),
+                    ->color(fn (string $state): string => $state === 'New Today' ? 'success' : 'gray')
+                    ->visible(fn (): bool => ! PatientPortal::isPatientUser()),
                 TextColumn::make('test_date')
                     ->label('Date')
                     ->date()
                     ->sortable()
                     ->since(),
                 TextColumn::make('lab_id')
-                    ->searchable(),
+                    ->searchable()
+                    ->visible(fn (): bool => ! PatientPortal::isPatientUser()),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -60,13 +65,19 @@ class LaboratoriesTable
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('patient.id')
                     ->label('Patient ID')
-                    ->searchable(),
+                    ->searchable()
+                    ->visible(fn (): bool => ! PatientPortal::isPatientUser()),
                 TextColumn::make('patient.full_name')
                     ->label('Patient')
                     ->searchable(),
                 TextColumn::make('doctor.full_name')
                     ->label('Doctor')
                     ->searchable(),
+                TextColumn::make('laboratorist.full_name')
+                    ->label('Laboratorist')
+                    ->searchable()
+                    ->placeholder('Unassigned')
+                    ->visible(fn (): bool => ! PatientPortal::isPatientUser()),
                 TextColumn::make('test_name')
                     ->searchable(),
                 TextColumn::make('test_type')
@@ -79,24 +90,28 @@ class LaboratoriesTable
                 TextColumn::make('result_date')
                     ->date()
                     ->sortable()
-                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser()),
+                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser() || PatientPortal::isPatientUser()),
                 TextColumn::make('result_value')
                     ->label('Result')
                     ->state(fn (Laboratory $record): string => self::formatResult($record))
                     ->wrap()
-                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser()),
+                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser() || PatientPortal::isPatientUser()),
                 TextColumn::make('result_status')
                     ->badge()
-                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser()),
+                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser()
+                        || PatientPortal::isPatientUser()
+                        || ClinicalStaffAccess::isLabStaff()),
                 TextColumn::make('normal_range')
                     ->searchable()
-                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser()),
+                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser() || PatientPortal::isPatientUser()),
                 TextColumn::make('cost')
                     ->money()
-                    ->sortable(),
+                    ->sortable()
+                    ->visible(fn (): bool => ! PatientPortal::isPatientUser()),
                 TextColumn::make('serviceRequest.payment_status')
                     ->label('Payment')
                     ->badge()
+                    ->visible(fn (): bool => ! PatientPortal::isPatientUser())
                     ->default('not sent')
                     ->color(fn (?string $state): string => match ($state) {
                         'paid', 'insurance', 'waived' => 'success',
@@ -114,11 +129,13 @@ class LaboratoriesTable
                         ? PublicStorageUrl::make($record->report_path)
                         : null)
                     ->openUrlInNewTab()
-                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser()),
+                    ->visible(fn (): bool => ClinicalReportAccess::isDoctorUser() || PatientPortal::isPatientUser()),
             ])
             ->filters([
                 TableFilters::relationship('patient', 'full_name', 'Patient'),
                 TableFilters::relationship('doctor', 'full_name', 'Doctor'),
+                TableFilters::relationship('laboratorist', 'full_name', 'Laboratorist')
+                    ->visible(fn (): bool => ! PatientPortal::isPatientUser() && ! ClinicalStaffAccess::isLabStaff()),
                 TableFilters::distinct('test_name', Laboratory::class, 'Test Name'),
                 TableFilters::distinct('test_type', Laboratory::class, 'Test Type'),
                 TableFilters::distinct('sample_type', Laboratory::class, 'Sample Type'),
@@ -149,7 +166,7 @@ class LaboratoriesTable
                     ->label('Send to Cashier')
                     ->icon('heroicon-o-banknotes')
                     ->color('warning')
-                    ->visible(fn (Laboratory $record): bool => blank($record->service_request_id) && filled($record->patient_id))
+                    ->visible(fn (Laboratory $record): bool => ! PatientPortal::isPatientUser() && blank($record->service_request_id) && filled($record->patient_id))
                     ->form([
                         Select::make('service_id')
                             ->label('Lab Service')
@@ -215,7 +232,7 @@ class LaboratoriesTable
                     ->color(fn (Laboratory $record): string => $record->serviceRequest?->payment_status === 'paid'
                         ? 'success'
                         : 'warning')
-                    ->visible(fn (Laboratory $record): bool => filled($record->service_request_id))
+                    ->visible(fn (Laboratory $record): bool => ! PatientPortal::isPatientUser() && filled($record->service_request_id))
                     ->disabled(fn (Laboratory $record): bool => $record->serviceRequest?->payment_status === 'paid')
                     ->action(function (Laboratory $record): void {
                         if ($record->serviceRequest?->payment_status === 'paid') {
@@ -235,7 +252,12 @@ class LaboratoriesTable
                     ->label('Record Results')
                     ->icon('heroicon-o-pencil-square')
                     ->color('success')
-                    ->visible(fn (Laboratory $record): bool => $record->paymentCleared() && $record->status !== 'completed')
+                    ->visible(fn (Laboratory $record): bool => ! PatientPortal::isPatientUser()
+                        && $record->paymentCleared()
+                        && $record->status !== 'completed'
+                        && (ClinicalStaffAccess::isLabStaff()
+                            ? ClinicalStaffAccess::canManageLaboratory($record)
+                            : ! ClinicalStaffAccess::isRadiologyStaff()))
                       ->form([
                         Select::make('result_status')
                             ->label('Result Status') // Good practice to add label
@@ -353,34 +375,34 @@ class LaboratoriesTable
                                         $opd->update($opdUpdates);
                                     }
 
-                                    // Notify Doctor
-                                  Notification::make()
-                                        ->title('Lab Result Added to OPD')
-                                        ->body("Result for {$record->patient->full_name} is available in OPD #{$opd->opd_id}.")
-                                        ->success()
-                                        ->sendToDatabase($record->doctor->user ?? User::usersByRoleName('doctor'));
                                 }
                             }
                         }
+
+                        if (ClinicalResultNotifier::notifyDoctor($record->refresh())) {
+                            Notification::make()
+                                ->title('Assigned doctor notified.')
+                                ->success()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title('Result saved, but the doctor was not notified.')
+                                ->body('Link a user account to the assigned doctor, then resend the notification.')
+                                ->warning()
+                                ->send();
+                        }
                     }),
                 Action::make('send_to_doctor')
-                    ->label('Notify Doctor')
+                    ->label('Resend to Doctor')
                     ->icon('heroicon-o-user-plus')
                     ->color('info')
                     ->requiresConfirmation()
-                    ->visible(fn (Laboratory $record): bool => $record->status === 'completed')
+                    ->visible(fn (Laboratory $record): bool => ! PatientPortal::isPatientUser() && $record->status === 'completed')
                     ->action(function (Laboratory $record): void {
-                        $doctorUser = $record->doctor?->user;
-
-                        if (! $doctorUser && filled($record->doctor?->email)) {
-                            $doctorUser = User::query()
-                                ->where('email', $record->doctor->email)
-                                ->first();
-                        }
-
-                        if (! $doctorUser) {
+                        if (! ClinicalResultNotifier::notifyDoctor($record)) {
                             Notification::make()
                                 ->title('The assigned doctor has no linked user account.')
+                                ->body('Link a user account to the doctor before sending the result.')
                                 ->danger()
                                 ->send();
 
@@ -388,13 +410,7 @@ class LaboratoriesTable
                         }
 
                         Notification::make()
-                            ->title('Laboratory result ready for review')
-                            ->body("Result for {$record->patient?->full_name} ({$record->lab_id}) is ready.")
-                            ->icon('heroicon-o-beaker')
-                            ->sendToDatabase(collect([$doctorUser]));
-
-                        Notification::make()
-                            ->title('Assigned doctor notified.')
+                            ->title('Assigned doctor notified again.')
                             ->success()
                             ->send();
                     }),

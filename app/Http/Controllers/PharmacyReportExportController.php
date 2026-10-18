@@ -9,6 +9,7 @@ class PharmacyReportExportController extends Controller
 {
     public function csv(): StreamedResponse
     {
+        $this->authorizeAccess();
         $startDate = request('start_date');
         $endDate = request('end_date');
         $rows = PharmacyReportService::rowsForCsv($startDate, $endDate);
@@ -52,5 +53,17 @@ class PharmacyReportExportController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv',
         ]);
+    }
+
+    private function authorizeAccess(): void
+    {
+        abort_unless(request()->user()?->hasAnyRole([
+            'admin',
+            'super_admin',
+            'pharmacy_staff',
+            'pharmacist',
+            'pharmacy',
+            'pharmcy',
+        ]), 403);
     }
 }

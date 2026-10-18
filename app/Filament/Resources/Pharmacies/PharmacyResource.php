@@ -20,10 +20,9 @@ class PharmacyResource extends Resource
 {
     protected static ?string $model = Pharmacy::class;
 
-    protected static ?string $navigationParentItem = 'Pharmacy Management';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
-
+  protected static ?string $navigationParentItem = 'Pharmacy Management';
     protected static ?string $recordTitleAttribute = 'id';
 
     public static function form(Schema $schema): Schema

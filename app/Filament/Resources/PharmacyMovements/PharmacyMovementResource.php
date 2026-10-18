@@ -14,10 +14,9 @@ use Filament\Tables\Table;
 class PharmacyMovementResource extends Resource
 {
     protected static ?string $model = PharmacyMovement::class;
-    protected static ?string $navigationParentItem = 'Pharmacy Management';
     protected static ?string $navigationLabel = 'Dispensing Movements';
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
+  protected static ?string $navigationParentItem = 'Pharmacy Management';
     public static function table(Table $table): Table
     {
         return PharmacyMovementsTable::configure($table);

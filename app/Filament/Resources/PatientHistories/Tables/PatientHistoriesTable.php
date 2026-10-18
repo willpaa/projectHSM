@@ -14,14 +14,22 @@ class PatientHistoriesTable
     {
         return $table
             ->columns([
-                TextColumn::make('patient.id')
+                TextColumn::make('patient.full_name')
+                    ->label('Patient')
                     ->searchable(),
                 TextColumn::make('encounter_id')
+                    ->label('Encounter')
                     ->searchable(),
                 TextColumn::make('source')
+                    ->badge()
                     ->searchable(),
                 TextColumn::make('activity')
                     ->searchable(),
+                TextColumn::make('details')
+                    ->label('Details')
+                    ->wrap()
+                    ->searchable()
+                    ->placeholder('-'),
                 TextColumn::make('occurred_at')
                     ->dateTime()
                     ->sortable(),
@@ -37,6 +45,7 @@ class PatientHistoriesTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('occurred_at', 'desc')
             ->filters([
                 //
             ])

@@ -13,10 +13,9 @@ class PharmacyBatchMovementResource extends Resource
 {
     protected static ?string $model = PharmacyBatchMovement::class;
 
-    protected static ?string $navigationParentItem = 'Pharmacy Management';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrow-path-rounded-square';
-
+ protected static ?string $navigationParentItem = 'Pharmacy Management';
     protected static ?string $navigationLabel = 'Stock Ledger';
 
     public static function form(Schema $schema): Schema { return $schema->components([]); }

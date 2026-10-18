@@ -44,9 +44,35 @@ class InventoryService
         return static::apply($inventory, -abs($quantity), 'sale', $referenceId, $notes);
     }
 
-    public static function dispensePrescription(Inventory $inventory, int $quantity, string $referenceId, ?string $notes = null): InventoryTransaction
+    /**
+     * Sale that also records WHICH batches were consumed (FEFO) so that
+     * per-sale cost of goods (COGS) and profit can be reported.
+     *
+     * @return array{transaction: InventoryTransaction, allocations: \Illuminate\Support\Collection<int, array{batch: PharmacyBatch, quantity: int, unit_cost: float}>}
+     */
+    public static function saleInvoiceWithBatches(Inventory $inventory, int $quantity, string $referenceId, ?string $notes = null): array
     {
-        return static::apply($inventory, -abs($quantity), 'dispense', $referenceId, $notes);
+        $transaction = static::apply($inventory, -abs($quantity), 'sale', $referenceId, $notes);
+
+        return [
+            'transaction' => $transaction,
+            'allocations' => collect(static::lastConsumption()),
+        ];
+    }
+
+    /**
+     * Dispense that also records WHICH batches were consumed (FEFO).
+     *
+     * @return array{transaction: InventoryTransaction, allocations: \Illuminate\Support\Collection<int, array{batch: PharmacyBatch, quantity: int, unit_cost: float}>}
+     */
+    public static function dispensePrescriptionWithBatches(Inventory $inventory, int $quantity, string $referenceId, ?string $notes = null): array
+    {
+        $transaction = static::apply($inventory, -abs($quantity), 'dispense', $referenceId, $notes);
+
+        return [
+            'transaction' => $transaction,
+            'allocations' => collect(static::lastConsumption()),
+        ];
     }
 
     public static function removeExpired(Inventory $inventory, int $quantity, ?string $notes = null): InventoryTransaction
@@ -195,8 +221,21 @@ class InventoryService
             ->where('quantity_remaining', '>', 0)
             ->where(fn ($query) => $query
                 ->whereNull('expiry_date')
-                ->orWhereDate('expiry_date', '>=', today()))
+                ->orWhere('expiry_date', '>=', today()->toDateString()))
             ->sum('quantity_remaining');
+    }
+
+    /** @var array<int, array{batch: PharmacyBatch, quantity: int, unit_cost: float}> */
+    protected static array $lastConsumption = [];
+
+    /**
+     * Return the batch allocations made by the most recent stock consumption.
+     *
+     * @return array<int, array{batch: PharmacyBatch, quantity: int, unit_cost: float}>
+     */
+    public static function lastConsumption(): array
+    {
+        return static::$lastConsumption;
     }
 
     protected static function consumeBatches(
@@ -206,16 +245,18 @@ class InventoryService
         ?string $referenceId,
         ?string $notes,
     ): void {
+        static::$lastConsumption = [];
+
         $batches = PharmacyBatch::query()
             ->where('inventory_item_id', $item->item_id)
             ->where('quantity_remaining', '>', 0)
             ->when($operationType === 'expired', fn ($query) => $query
                 ->whereNotNull('expiry_date')
-                ->whereDate('expiry_date', '<', today()))
+                ->where('expiry_date', '<', today()->toDateString()))
             ->when($operationType !== 'expired', fn ($query) => $query
                 ->where(fn ($expiry) => $expiry
                     ->whereNull('expiry_date')
-                    ->orWhereDate('expiry_date', '>=', today())))
+                    ->orWhere('expiry_date', '>=', today()->toDateString())))
             ->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END')
             ->orderBy('expiry_date')
             ->orderBy('id')
@@ -238,6 +279,12 @@ class InventoryService
 
             $taken = min($remaining, (int) $batch->quantity_remaining);
             $batch->decrement('quantity_remaining', $taken);
+
+            static::$lastConsumption[] = [
+                'batch' => $batch,
+                'quantity' => $taken,
+                'unit_cost' => (float) $batch->purchase_price,
+            ];
 
             PharmacyBatchMovement::query()->create([
                 'pharmacy_batch_id' => $batch->id,

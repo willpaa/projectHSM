@@ -18,6 +18,7 @@ class StaffInfolist
                     ->schema([
                         TextEntry::make('staff_id'),
                         TextEntry::make('full_name'),
+                        TextEntry::make('user.name')->label('Login Account')->placeholder('Not linked'),
                         TextEntry::make('role'),
                         TextEntry::make('department')
                             ->placeholder('-'),

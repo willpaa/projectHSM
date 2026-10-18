@@ -13,7 +13,6 @@ use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Resources\Departments\DepartmentResource;
 use App\Filament\Resources\Doctors\DoctorsResource;
 use App\Filament\Resources\Inventories\InventoryResource;
-use App\Filament\Pages\PharmacyReportDashboard;
 use App\Filament\Resources\Nurses\NurseResource;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Auth\Pages\Login as BaseLogin;
@@ -87,8 +86,8 @@ class AdminPanelProvider extends PanelProvider
 
             /* 2. Fix Body/Layout background and scrolling */
             .fi-body {
-                background-color: #aab5c7;
-                color: #1e293b;
+                background-color: 000000;
+                color: #f2f4f7;
                 font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
                 font-size: 0.95rem;
                 font-weight: 450;
@@ -623,17 +622,21 @@ class AdminPanelProvider extends PanelProvider
                     ->visible(fn (): bool => auth()->user()?->hasAnyRole(['admin', 'super_admin', 'pharmacy_staff', 'pharmacist', 'pharmacy', 'pharmcy']))
                     ->url(fn (): string => InventoryResource::getUrl())
                     ->childItems([
-                        NavigationItem::make('Pharmacy Reports')
-                            ->icon('heroicon-o-presentation-chart-line')
-                            ->url(fn (): string => PharmacyReportDashboard::getUrl())
+                        NavigationItem::make('Print Pharmacy Report')
+                            ->icon('heroicon-o-printer')
+                            ->url(fn (): string => route('pharmacy-reports.print'))
                             ->visible(fn (): bool => auth()->user()?->hasAnyRole(['admin', 'super_admin', 'pharmacy_staff', 'pharmacist', 'pharmacy', 'pharmcy']) ?? false)
-                            ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.pages.pharmacy-report-dashboard')),
+                            ->isActiveWhen(fn (): bool => request()->routeIs('pharmacy-reports.print')),
                     ])
                     ->isActiveWhen(fn (): bool => request()->routeIs([
                         'filament.admin.resources.inventories.*',
                         'filament.admin.resources.inventory-transactions.*',
                         'filament.admin.resources.pharmacies.*',
                         'filament.admin.resources.pharmacy-sales.*',
+                        'filament.admin.resources.pharmacy-storage-temperatures.*',
+                        'filament.admin.resources.controlled-substance-registers.*',
+                        'filament.admin.resources.pharmacy-adverse-reactions.*',
+                        'filament.admin.pages.dashboard',
                         'filament.admin.pages.pharmacy-report-dashboard',
                         'pharmacy-reports.export.csv',
                         'pharmacy-reports.print',
@@ -642,12 +645,21 @@ class AdminPanelProvider extends PanelProvider
                 NavigationItem::make('Staff Management')
                     ->icon('heroicon-o-folder')
                     ->sort(31)
-                    ->visible(fn (): bool => auth()->user()?->hasAnyRole(['admin', 'super_admin']))
-                    ->url(fn (): string => NurseResource::getUrl())
+                    ->visible(fn (): bool => auth()->user()?->hasAnyRole([
+                        'admin', 'super_admin', 'lab_technician', 'lab_staff', 'laboratory_staff',
+                        'radiology_technician', 'radiology_staff',
+                    ]))
+                    ->url(fn (): string => auth()->user()?->hasAnyRole(['lab_technician', 'lab_staff', 'laboratory_staff'])
+                        ? \App\Filament\Resources\Laboratories\LaboratoryResource::getUrl()
+                        : (auth()->user()?->hasAnyRole(['radiology_technician', 'radiology_staff'])
+                            ? \App\Filament\Resources\Radiologies\RadiologyResource::getUrl()
+                            : NurseResource::getUrl()))
                     ->isActiveWhen(fn (): bool => request()->routeIs([
                         'filament.admin.resources.nurses.*',
                         'filament.admin.resources.doctors.*',
                         'filament.admin.resources.departments.*',
+                        'filament.admin.resources.laboratories.*',
+                        'filament.admin.resources.radiologies.*',
                     ])),
             ])
 

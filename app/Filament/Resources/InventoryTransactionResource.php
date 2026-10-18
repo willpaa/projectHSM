@@ -13,13 +13,10 @@ use UnitEnum;
 class InventoryTransactionResource extends Resource
 {
     protected static ?string $model = InventoryTransaction::class;
-
-    protected static ?string $navigationParentItem = 'Pharmacy Management';
+ protected static ?string $navigationParentItem = 'Pharmacy Management';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrows-right-left';
     
-    protected static UnitEnum|string|null $navigationGroup = 'Inventory Management';
-
     protected static ?string $navigationLabel = 'Stock History';
 
     public static function table(Table $table): Table

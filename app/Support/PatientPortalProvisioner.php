@@ -56,6 +56,7 @@ class PatientPortalProvisioner
         $pdf = SimplePdf::textDocument('Patient Portal Credentials', [
             'Patient Name: ' . $patient->full_name,
             'Patient ID: ' . $patient->patient_id,
+            'MRN: ' . $patient->mrn,
             'Portal URL: ' . url('/admin/login'),
             'Email: ' . $user->email,
             'Temporary Password: ' . $plainTextPassword,

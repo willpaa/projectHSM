@@ -5,11 +5,32 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\ScopesPatientRecords;
+use App\Services\PatientHistoryRecorder;
 
 
 class Payments extends Model
 {
-    use HasFactory;
+    use HasFactory, ScopesPatientRecords;
+
+    protected static function booted(): void
+    {
+        static::created(function (self $payment): void {
+            PatientHistoryRecorder::record(
+                $payment->patient_id ? (int) $payment->patient_id : null,
+                'payment',
+                'Payment recorded',
+                implode(' | ', array_filter([
+                    'Invoice: ' . $payment->invoice_number,
+                    'Amount: ' . $payment->amount,
+                    'Method: ' . ($payment->payment_mode ?: $payment->payment_method),
+                    'Status: ' . $payment->payment_status,
+                ])),
+                $payment->serviceRequest?->encounter_id ?: $payment->invoice_number,
+                $payment->collected_by,
+            );
+        });
+    }
 
     /**
      * Explicitly defining the table name to ensure it matches your database.

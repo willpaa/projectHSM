@@ -195,7 +195,7 @@ class ServiceRequestForm
                 
                 Tables\Filters\Filter::make('today')
                     ->label('Today')
-                    ->query(fn($query) => $query->whereDate('requested_at', today())),
+                    ->query(fn ($query) => $query->whereBetween('requested_at', [today(), today()->copy()->endOfDay()])),
             ])
             ->actions([
                 Actions::make('verify')
@@ -237,4 +237,3 @@ class ServiceRequestForm
         ];
     }
     }
-

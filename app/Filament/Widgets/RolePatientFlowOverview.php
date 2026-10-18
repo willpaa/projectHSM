@@ -21,8 +21,10 @@ class RolePatientFlowOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
+        $todayStart = today();
+
         $newPatientsToday = Patients::query()
-            ->whereDate('created_at', today())
+            ->whereBetween('created_at', [$todayStart, $todayStart->copy()->endOfDay()])
             ->count();
         $opdCount = OPD::query()->count();
         $ipdCount = IPD::query()->count();

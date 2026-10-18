@@ -25,7 +25,8 @@ class DoctorsInfolist
                         TextEntry::make('email')
                             ->label('Email address')
                             ->placeholder('-'),
-                        TextEntry::make('department')
+                        TextEntry::make('department.name')
+                            ->label('Department')
                             ->placeholder('-'),
                         TextEntry::make('availability_schedule')
                             ->formatStateUsing(function ($state): ?string {
