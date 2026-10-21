@@ -70,6 +70,14 @@ class RadiologyResource extends Resource
         return parent::canViewAny();
     }
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        $user = auth()->user();
+
+        return ! ($user?->hasRole('doctor') && ! $user->hasAnyRole(['admin', 'super_admin']))
+            && parent::shouldRegisterNavigation();
+    }
+
     public static function canView($record): bool
     {
         if (PatientPortal::isPatientUser()) {

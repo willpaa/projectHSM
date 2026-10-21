@@ -65,9 +65,15 @@ class StaffTable
                     'lab_technician' => 'Lab Technician',
                     'radiology_technician' => 'Radiology Technician',
                     'pharmacist' => 'Pharmacist',
-                    'accountant' => 'Accountant',
+                    'accountant' => 'Finance Staff',
                     'admin' => 'Admin',
-                ] : [$fixedRole => $fixedRole === 'lab_technician' ? 'Lab Technician' : 'Radiology Technician']),
+                ] : [$fixedRole => match ($fixedRole) {
+                    'lab_technician' => 'Lab Technician',
+                    'radiology_technician' => 'Radiology Technician',
+                    'accountant' => 'Finance Staff',
+                    'pharmacist' => 'Pharmacist',
+                    default => $fixedRole,
+                }]),
                 TableFilters::select('shift', [
                     'day' => 'Day',
                     'night' => 'Night',

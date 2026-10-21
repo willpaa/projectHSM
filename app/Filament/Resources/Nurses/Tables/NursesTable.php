@@ -15,7 +15,7 @@ use Illuminate\Validation\Rules\Email;
 
 class NursesTable
 {
-    public static function configure(Table $table): Table
+    public static function configure(Table $table, ?string $fixedRole = null): Table
     {
         return $table
             ->columns([
@@ -26,6 +26,12 @@ class NursesTable
                     ->searchable(),
                 TextColumn::make('full_name')
                     ->searchable(),
+                TextColumn::make('role')
+                    ->label('Role')
+                    ->badge(),
+                TextColumn::make('user.name')
+                    ->label('Login Account')
+                    ->placeholder('Not linked'),
                 TextColumn::make('gender')
                     ->badge(),
                 TextColumn::make('phone')
@@ -57,6 +63,9 @@ class NursesTable
             ])
             ->filters([
                 TableFilters::relationship('department', 'name', 'Department'),
+                TableFilters::select('role', $fixedRole === null
+                    ? ['nurse' => 'Nurse', 'triage_nurse' => 'Triage Nurse']
+                    : [$fixedRole => $fixedRole === 'triage_nurse' ? 'Triage Nurse' : 'Nurse']),
                 TableFilters::select('gender', [
                     'male' => 'Male',
                     'female' => 'Female',

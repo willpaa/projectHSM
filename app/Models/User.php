@@ -70,6 +70,11 @@ class User extends Authenticatable implements HasAvatar
         return $this->hasOne(Staff::class, 'user_id');
     }
 
+    public function nurseProfile(): HasOne
+    {
+        return $this->hasOne(Nurse::class, 'user_id');
+    }
+
     public function getFilamentAvatarUrl(): ?string
     {
         return filled($this->avatar_url)

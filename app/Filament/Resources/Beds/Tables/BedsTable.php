@@ -32,7 +32,13 @@ class BedsTable
                 TextColumn::make('current_patient_id')
                     ->numeric()
                     ->sortable(),
+                TextColumn::make('assignedNurseProfile.full_name')
+                    ->label('Responsible Nurse')
+                    ->placeholder('Not assigned')
+                    ->searchable(),
                 TextColumn::make('assigned_nurse')
+                    ->label('Legacy Nurse ID')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
                 TextColumn::make('last_cleaned_at')
                     ->dateTime()

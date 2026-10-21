@@ -26,7 +26,7 @@ class StaffForm
                     'lab_technician' => 'Lab Technician',
                     'radiology_technician' => 'Radiology Technician',
                     'pharmacist' => 'Pharmacist',
-                    'accountant' => 'Accountant',
+                    'accountant' => 'Finance Staff',
                     'admin' => 'Admin',
                 ])
                 ->searchable()
@@ -47,6 +47,8 @@ class StaffForm
                         $roles = match ($get('role')) {
                             'lab_technician' => ['lab_technician', 'lab_staff', 'laboratory_staff'],
                             'radiology_technician' => ['radiology_technician', 'radiology_staff'],
+                            'accountant' => ['accountant', 'cashier', 'casher', 'billing_staff'],
+                            'pharmacist' => ['pharmacist', 'pharmacy_staff', 'pharmacy', 'pharmcy'],
                             default => null,
                         };
 
@@ -67,8 +69,8 @@ class StaffForm
                     })
                     ->searchable()
                     ->preload()
-                    ->required(fn (Get $get): bool => in_array($get('role'), ['lab_technician', 'radiology_technician'], true))
-                    ->visible(fn (Get $get): bool => in_array($get('role'), ['lab_technician', 'radiology_technician'], true))
+                    ->required(fn (Get $get): bool => in_array($get('role'), ['lab_technician', 'radiology_technician', 'accountant', 'pharmacist'], true))
+                    ->visible(fn (Get $get): bool => in_array($get('role'), ['lab_technician', 'radiology_technician', 'accountant', 'pharmacist'], true))
                     ->helperText('Create a login account with the matching role first, then link it here.'),
                 $roleField,
                 TextInput::make('department')

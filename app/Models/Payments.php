@@ -48,6 +48,8 @@ class Payments extends Model
         'payment_method',
         'payment_status',
         'payment_date',
+        'transaction_id',
+        'remarks',
     ];
 
     protected $casts = [

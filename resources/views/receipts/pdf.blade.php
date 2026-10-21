@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>Payment Receipt - {{ $payment->invoice_number }}</title>
+    <title>Patient Payment Receipt - {{ $payment->invoice_number }}</title>
     <style>
         * {
             margin: 0;
@@ -319,7 +319,7 @@
                 123 Healthcare Avenue, Medical District<br>
                 Phone: +1 234 567 8900 | Email: info@cityhospital.com
             </div>
-            <div class="receipt-title">PAYMENT RECEIPT</div>
+            <div class="receipt-title">PATIENT PAYMENT RECEIPT</div>
         </div>
         
         {{-- Body --}}
@@ -437,14 +437,19 @@
                 </div>
                 
                 <div class="paid-row">
-                    <span class="paid-label">✓ AMOUNT PAID</span>
+                    <span class="paid-label">✓ PAID ON THIS RECEIPT</span>
                     <span class="paid-value">ETB {{ number_format($payment->amount, 2) }}</span>
                 </div>
                 
-                @if(($payment->serviceRequest->patient_share - $payment->amount) > 0)
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Total patient payments for this request</span>
+                    <span class="breakdown-value">ETB {{ number_format($patientPaidAmount, 2) }}</span>
+                </div>
+
+                @if(($payment->serviceRequest->balance ?? 0) > 0)
                 <div class="remaining-row">
                     <span class="remaining-label">⚠️ Remaining Balance</span>
-                    <span class="remaining-value">ETB {{ number_format($payment->serviceRequest->patient_share - $payment->amount, 2) }}</span>
+                    <span class="remaining-value">ETB {{ number_format($payment->serviceRequest->balance, 2) }}</span>
                 </div>
                 @endif
             </div>

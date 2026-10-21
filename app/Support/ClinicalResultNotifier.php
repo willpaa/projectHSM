@@ -32,18 +32,27 @@ class ClinicalResultNotifier
             : RadiologyResource::class;
         $resultType = $record instanceof Laboratory ? 'Laboratory' : 'Radiology';
         $recordNumber = $record instanceof Laboratory ? $record->lab_id : $record->radiology_id;
+        $isCriticalRadiologyResult = $record instanceof Radiology && $record->result_status === 'critical';
 
-        Notification::make()
-            ->title("{$resultType} result ready for review")
-            ->body("Result for {$record->patient?->full_name} ({$recordNumber}) is ready.")
+        $notification = Notification::make()
+            ->title($isCriticalRadiologyResult ? 'CRITICAL radiology result - immediate review required' : "{$resultType} result ready for review")
+            ->body($isCriticalRadiologyResult
+                ? "Critical result for {$record->patient?->full_name} ({$recordNumber}). Review immediately; direct communication is documented in the report."
+                : "Result for {$record->patient?->full_name} ({$recordNumber}) is ready.")
             ->icon($record instanceof Laboratory ? 'heroicon-o-beaker' : 'heroicon-o-document-magnifying-glass')
             ->actions([
                 NotificationAction::make('view_result')
                     ->label('View result')
                     ->url($resource::getUrl('view', ['record' => $record])),
-            ])
-            ->info()
-            ->sendToDatabase($doctorUser, isEventDispatched: true);
+            ]);
+
+        if ($isCriticalRadiologyResult) {
+            $notification->danger();
+        } else {
+            $notification->info();
+        }
+
+        $notification->sendToDatabase($doctorUser, isEventDispatched: true);
 
         return true;
     }

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Users\Pages;
 
 use App\Filament\Resources\Users\UserResource;
+use App\Services\StaffProfileSynchronizer;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
@@ -16,6 +17,11 @@ class EditUser extends EditRecord
     return static::getResource()::getUrl('index');
 
   }
+
+    protected function afterSave(): void
+    {
+        app(StaffProfileSynchronizer::class)->sync($this->record);
+    }
     protected function getHeaderActions(): array
     {
         return [

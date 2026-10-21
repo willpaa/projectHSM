@@ -36,7 +36,7 @@ class IPD extends Model
                 $ipd->syncBedAssignment($ipd->getOriginal('bed_id'));
             }
 
-            if ($ipd->wasChanged(['status', 'diagnosis', 'treatment_plan', 'discharge_date', 'bed_id'])) {
+            if ($ipd->wasChanged(['status', 'diagnosis', 'treatment_plan', 'nursing_notes', 'discharge_date', 'bed_id'])) {
                 PatientHistoryRecorder::record(
                     $ipd->patient_id ? (int) $ipd->patient_id : null,
                     'ipd',
@@ -45,6 +45,7 @@ class IPD extends Model
                         'Status: ' . $ipd->status,
                         filled($ipd->diagnosis) ? 'Diagnosis: ' . $ipd->diagnosis : null,
                         filled($ipd->treatment_plan) ? 'Treatment plan: ' . $ipd->treatment_plan : null,
+                        filled($ipd->nursing_notes) ? 'Nursing notes updated.' : null,
                         $ipd->discharge_date ? 'Discharge date: ' . $ipd->discharge_date->toDateString() : null,
                         filled($ipd->bed_id) ? 'Bed: ' . $ipd->bed_id : null,
                     ])),
@@ -69,6 +70,7 @@ class IPD extends Model
         'discharge_date',
         'bed_id',
         'treatment_plan',
+        'nursing_notes',
         'prescription_id',
         'status',
     ];
@@ -91,10 +93,16 @@ class IPD extends Model
         $isAvailable = in_array($this->status, ['discharged', 'transferred'], true)
             || filled($this->discharge_date);
 
-        Beds::where('bed_id', $this->bed_id)->update([
+        $bedUpdates = [
             'current_patient_id' => $isAvailable ? null : $this->patient_id,
             'occupancy_status' => $isAvailable ? 'available' : 'occupied',
-        ]);
+        ];
+
+        if ($isAvailable) {
+            $bedUpdates['assigned_nurse_id'] = null;
+        }
+
+        Beds::where('bed_id', $this->bed_id)->update($bedUpdates);
     }
 
     public function releaseBedAssignment(?string $bedId = null): void
@@ -108,6 +116,7 @@ class IPD extends Model
         Beds::where('bed_id', $bedId)->update([
             'current_patient_id' => null,
             'occupancy_status' => 'available',
+            'assigned_nurse_id' => null,
         ]);
     }
 

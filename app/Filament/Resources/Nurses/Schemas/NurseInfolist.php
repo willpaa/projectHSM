@@ -19,6 +19,8 @@ class NurseInfolist
                     ->schema([
                         TextEntry::make('nurse_id'),
                         TextEntry::make('full_name'),
+                        TextEntry::make('role')->label('Role')->badge(),
+                        TextEntry::make('user.name')->label('Login Account')->placeholder('Not linked'),
                         TextEntry::make('gender')->badge(),
                         TextEntry::make('phone')->placeholder('-'),
                         TextEntry::make('email')->label('Email address')->placeholder('-'),

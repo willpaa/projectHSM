@@ -90,7 +90,7 @@ class ServiceRequestsTable
                 TableFilters::createdAt('requested_at', 'Requested Date'),
             ], layout: FiltersLayout::AboveContentCollapsible)
             ->defaultSort('requested_at', 'desc')
-            ->modifyQueryUsing(fn ($query) => $query->with(['patient', 'service', 'payments']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['patient', 'service', 'payment']))
             ->recordActions([
                 Action::make('collect_payment')
                     ->label('Collect Payment')
@@ -101,6 +101,8 @@ class ServiceRequestsTable
                         TextInput::make('amount')
                             ->numeric()
                             ->required()
+                            ->minValue(0.01)
+                            ->maxValue(fn (ServiceRequest $record): float => $record->balance)
                             ->default(fn (ServiceRequest $record): float => max(0, (float) $record->patient_share - (float) $record->discount - (float) $record->paid_amount)),
                         Select::make('payment_mode')
                             ->options([
@@ -120,9 +122,9 @@ class ServiceRequestsTable
                     ->action(function (ServiceRequest $record, array $data): void {
                         $amount = (float) ($data['amount'] ?? 0);
 
-                        if ($amount <= 0) {
+                        if ($amount <= 0 || $amount > $record->balance) {
                             Notification::make()
-                                ->title('Payment amount must be greater than zero.')
+                                ->title('Payment must be positive and cannot exceed the outstanding balance.')
                                 ->danger()
                                 ->send();
 
@@ -142,25 +144,25 @@ class ServiceRequestsTable
                             ->send();
                     }),
                 Action::make('receipt')
-                    ->label('Receipt')
+                    ->label(fn (ServiceRequest $record): string => $record->payment?->payment_mode === 'insurance' ? 'Insurance Record' : 'Patient Receipt')
                     ->icon('heroicon-o-printer')
                     ->color('info')
-                    ->visible(fn (ServiceRequest $record): bool => filled($record->payments?->id))
+                    ->visible(fn (ServiceRequest $record): bool => filled($record->payment?->id))
                     ->url(fn (ServiceRequest $record): string => route('receipts.payments.show', [
-                        'payment' => $record->payments,
+                        'payment' => $record->payment,
                     ]))
                     ->openUrlInNewTab(),
                 Action::make('download_receipt')
-                    ->label('PDF')
+                    ->label(fn (ServiceRequest $record): string => $record->payment?->payment_mode === 'insurance' ? 'Claim PDF' : 'Receipt PDF')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
-                    ->visible(fn (ServiceRequest $record): bool => filled($record->payments?->id))
+                    ->visible(fn (ServiceRequest $record): bool => filled($record->payment?->id))
                     ->url(fn (ServiceRequest $record): string => route('payments.receipts.download', [
-                        'payment' => $record->payments,
+                        'payment' => $record->payment,
                     ]))
                     ->openUrlInNewTab(),
                 Action::make('approve_insurance')
-                    ->label('Approve Insurance')
+                    ->label('Record Insurance Approval')
                     ->icon('heroicon-o-shield-check')
                     ->color('info')
                     ->visible(fn (ServiceRequest $record): bool => $record->insurance_share > 0 && ! $record->canProceedForService())
@@ -174,7 +176,7 @@ class ServiceRequestsTable
                         ]);
 
                         Payments::create([
-                            'invoice_number' => 'INV-' . now()->format('YmdHis') . '-' . $record->id . '-' . random_int(100, 999),
+                            'invoice_number' => 'INS-' . now()->format('YmdHis') . '-' . $record->id . '-' . random_int(100, 999),
                             'service_request_id' => $record->id,
                             'patient_id' => $record->patient_id,
                             'collected_by' => Auth::id(),
@@ -185,7 +187,7 @@ class ServiceRequestsTable
                         ]);
 
                         Notification::make()
-                            ->title('Insurance approved. Department can proceed.')
+                            ->title('Insurance approval recorded. Department can proceed.')
                             ->success()
                             ->send();
                     }),

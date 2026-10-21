@@ -11,6 +11,7 @@ use App\Filament\Resources\Triages\Schemas\TriageInfolist;
 use App\Filament\Resources\Triages\Tables\TriagesTable;
 use App\Models\Triage;
 use App\Support\PatientPortal;
+use App\Support\ClinicalNurseAccess;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -51,28 +52,54 @@ class TriageResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with(['patient', 'nurse']);
 
         if (PatientPortal::isPatientUser()) {
             return $query->where('patient_id', PatientPortal::currentPatientId());
         }
 
-        return $query;
+        if (ClinicalNurseAccess::isTriageNurse()
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            $nurseId = ClinicalNurseAccess::currentNurseId('triage_nurse');
+
+            return $query
+                ->where(function (Builder $triageQuery) use ($nurseId): void {
+                    $triageQuery->where('nurse_id', $nurseId ?? 0)
+                        ->orWhere(function (Builder $unassignedQuery): void {
+                            $unassignedQuery
+                                ->whereNull('nurse_id')
+                                ->whereIn('status', ['waiting', 'in_progress']);
+                        });
+                })
+                ->orderByRaw("CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END")
+                ->orderBy('created_at');
+        }
+
+        return $query
+            ->orderByRaw("CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END")
+            ->orderBy('created_at');
     }
 
     public static function canCreate(): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return ! PatientPortal::isPatientUser()
+            && (auth()->user()?->hasAnyRole(['admin', 'super_admin'])
+                || (ClinicalNurseAccess::isTriageNurse()
+                    && ClinicalNurseAccess::currentNurseId('triage_nurse') !== null));
     }
 
     public static function canEdit($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return ! PatientPortal::isPatientUser()
+            && $record instanceof Triage
+            && ClinicalNurseAccess::canAccessTriage($record)
+            && $record->status !== 'sent_to_opd';
     }
 
     public static function canDelete($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return ! PatientPortal::isPatientUser()
+            && auth()->user()?->hasAnyRole(['admin', 'super_admin']);
     }
 
     public static function getPages(): array

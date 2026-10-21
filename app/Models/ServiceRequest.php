@@ -5,10 +5,12 @@ use App\Models\Payments;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Events\PaymentRequested;
 use App\Events\PaymentVerified;
 use App\Support\ServiceRequestNotifier;
 use App\Models\Concerns\ScopesPatientRecords;
+use Illuminate\Support\Facades\DB;
 
 class ServiceRequest extends Model
 {
@@ -87,14 +89,14 @@ class ServiceRequest extends Model
         return $this->belongsTo(User::class, 'collected_by');
     }
     
-    public function payments(): HasOne
+    public function payments(): HasMany
     {
-        return $this->hasOne(Payments::class);
+        return $this->hasMany(Payments::class);
     }
 
     public function payment(): HasOne
     {
-        return $this->hasOne(Payments::class);
+        return $this->hasOne(Payments::class)->latestOfMany();
     }
 
     public function laboratory(): HasOne
@@ -110,7 +112,7 @@ class ServiceRequest extends Model
     // Accessors
     public function getBalanceAttribute(): float
     {
-        return $this->patient_share - $this->paid_amount;
+        return max(0.0, round((float) $this->patient_share - (float) $this->discount - (float) $this->paid_amount, 2));
     }
 
     public function canProceedForService(): bool
@@ -139,29 +141,38 @@ class ServiceRequest extends Model
     
     public function markAsPaid(int $cashierId, float $amount, string $mode, ?array $splitDetails = null): Payments
     {
-        $paidAmount = $this->paid_amount + $amount;
-        $paymentStatus = $paidAmount >= max(0, $this->patient_share - $this->discount)
-            ? 'paid'
-            : 'verified';
+        return DB::transaction(function () use ($cashierId, $amount, $mode, $splitDetails): Payments {
+            $request = static::query()->lockForUpdate()->findOrFail($this->getKey());
+            $balance = $request->balance;
 
-        $this->update([
-            'payment_status' => $paymentStatus,
-            'collected_by' => $cashierId,
-            'paid_amount' => $paidAmount,
-            'paid_at' => now(),
-            'fulfillment_status' => $paymentStatus === 'paid' ? 'in_progress' : $this->fulfillment_status,
-        ]);
-        
-        return Payments::create([
-            'invoice_number' => 'INV-' . now()->format('YmdHis') . '-' . $this->id . '-' . random_int(100, 999),
-            'service_request_id' => $this->id,
-            'patient_id' => $this->patient_id,
-            'collected_by' => $cashierId,
-            'payment_mode' => $mode,
-            'amount' => $amount,
-            'split_details' => $splitDetails,
-            'payment_date' => now()
-        ]);
+            if ($amount <= 0 || $amount > $balance) {
+                throw new \InvalidArgumentException('Payment must be greater than zero and cannot exceed the outstanding patient balance.');
+            }
+
+            $paidAmount = (float) $request->paid_amount + $amount;
+            $paymentStatus = $paidAmount >= max(0, (float) $request->patient_share - (float) $request->discount)
+                ? 'paid'
+                : 'verified';
+
+            $request->update([
+                'payment_status' => $paymentStatus,
+                'collected_by' => $cashierId,
+                'paid_amount' => $paidAmount,
+                'paid_at' => now(),
+                'fulfillment_status' => $paymentStatus === 'paid' ? 'in_progress' : $request->fulfillment_status,
+            ]);
+
+            return Payments::create([
+                'invoice_number' => 'INV-' . now()->format('YmdHis') . '-' . $request->id . '-' . random_int(100, 999),
+                'service_request_id' => $request->id,
+                'patient_id' => $request->patient_id,
+                'collected_by' => $cashierId,
+                'payment_mode' => $mode,
+                'amount' => $amount,
+                'split_details' => $splitDetails,
+                'payment_date' => now(),
+            ]);
+        });
     }
     
     // Scopes

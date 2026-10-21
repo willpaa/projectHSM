@@ -39,6 +39,10 @@ class IPDInfolist
                         TextEntry::make('treatment_plan')
                             ->placeholder('-')
                             ->columnSpanFull(),
+                        TextEntry::make('nursing_notes')
+                            ->label('Nursing Notes and Observations')
+                            ->placeholder('-')
+                            ->columnSpanFull(),
                         TextEntry::make('prescription_id')
                             ->placeholder('-'),
                         TextEntry::make('status')

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Receipt - {{ $payment->invoice_number }}</title>
+    <title>Patient Payment Receipt - {{ $payment->invoice_number }}</title>
     <style>
         * {
             margin: 0;
@@ -218,7 +218,7 @@
         <div class="receipt-header">
             <div class="hospital-name">🏥 CITY HOSPITAL</div>
             <div class="hospital-tagline">Excellence in Healthcare</div>
-            <div class="receipt-title">PAYMENT RECEIPT</div>
+            <div class="receipt-title">PATIENT PAYMENT RECEIPT</div>
         </div>
         
         {{-- Body --}}
@@ -322,14 +322,19 @@
                 </div>
                 
                 <div class="total-row">
-                    <span>Amount Paid</span>
+                    <span>Paid on this receipt</span>
                     <span class="paid-amount">ETB {{ number_format($payment->amount, 2) }}</span>
                 </div>
+
+                <div class="breakdown-row">
+                    <span>Total patient payments for this request</span>
+                    <span>ETB {{ number_format($patientPaidAmount, 2) }}</span>
+                </div>
                 
-                @if(($payment->serviceRequest->patient_share - $payment->amount) > 0)
+                @if(($payment->serviceRequest->balance ?? 0) > 0)
                 <div class="breakdown-row" style="background: #fef3c7; margin-top: 10px; padding: 8px; border-radius: 6px;">
                     <span style="color: #92400e;">Remaining Balance</span>
-                    <span style="color: #92400e; font-weight: bold;">ETB {{ number_format($payment->serviceRequest->patient_share - $payment->amount, 2) }}</span>
+                    <span style="color: #92400e; font-weight: bold;">ETB {{ number_format($payment->serviceRequest->balance, 2) }}</span>
                 </div>
                 @endif
             </div>

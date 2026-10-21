@@ -99,6 +99,8 @@ class PatientsTable
                     'female' => 'Female',
                     'other' => 'Other',
                 ]),
+                TableFilters::distinct('patient_id', Patients::class, 'Patient Code'),
+                 TableFilters::distinct('mrn', Patients::class, 'MRN'),
                 TableFilters::select('blood_group', [
                     'A+' => 'A+',
                     'A-' => 'A-',
@@ -126,10 +128,13 @@ class PatientsTable
                 ->label('Send to Triage')
                 ->icon('heroicon-o-clipboard-document-list')
                 ->color('warning')
+                ->visible(fn (): bool => auth()->user()?->hasAnyRole([
+                    'admin', 'super_admin', 'receptionist', 'opd_staff', 'triage_nurse',
+                ]) ?? false)
                 ->action(function (Patients $record): void {
                     $pendingTriageExists = Triage::query()
                         ->where('patient_id', $record->id)
-                        ->whereIn('status', ['waiting', 'in_progress', 'completed'])
+                        ->whereIn('status', ['waiting', 'in_progress'])
                         ->exists();
 
                     if ($pendingTriageExists) {

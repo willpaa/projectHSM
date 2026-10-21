@@ -11,7 +11,7 @@ class ClinicalReportAccess
     {
         $user = auth()->user();
 
-        if (! $user?->hasRole('doctor')) {
+        if (! $user) {
             return null;
         }
 

@@ -87,10 +87,13 @@ class EditPatients extends EditRecord
                 ->label('Send to Triage')
                 ->icon('heroicon-o-clipboard-document-list')
                 ->color('warning')
+                ->visible(fn (): bool => auth()->user()?->hasAnyRole([
+                    'admin', 'super_admin', 'receptionist', 'opd_staff', 'triage_nurse',
+                ]) ?? false)
                 ->action(function (): void {
                     $pendingTriageExists = Triage::query()
                         ->where('patient_id', $this->record->id)
-                        ->whereIn('status', ['waiting', 'in_progress', 'completed'])
+                        ->whereIn('status', ['waiting', 'in_progress'])
                         ->exists();
 
                     if ($pendingTriageExists) {

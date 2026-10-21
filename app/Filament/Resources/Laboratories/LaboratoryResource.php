@@ -54,15 +54,15 @@ class LaboratoryResource extends Resource
 
     public static function canViewAny(): bool
     {
+        if (PatientPortal::isPatientUser()) {
+            return true;
+        }
+
         if (ClinicalStaffAccess::isLabStaff()) {
             return ClinicalStaffAccess::canManageLaboratory();
         }
 
-        if (ClinicalStaffAccess::isRadiologyStaff()) {
-            return false;
-        }
-
-        return ! ClinicalReportAccess::isDoctorUser();
+        return auth()->user()?->hasAnyRole(['admin', 'super_admin']) ?? false;
     }
 
     public static function canView($record): bool
@@ -72,7 +72,7 @@ class LaboratoryResource extends Resource
         }
 
         if (ClinicalReportAccess::isDoctorUser()) {
-            return ClinicalReportAccess::canViewReport($record);
+            return false;
         }
 
         if (ClinicalStaffAccess::isLabStaff()) {
@@ -83,7 +83,7 @@ class LaboratoryResource extends Resource
             return false;
         }
 
-        return (bool) auth()->user()?->can('View:Laboratory');
+        return (bool) auth()->user()?->hasAnyRole(['admin', 'super_admin']);
     }
 
     public static function getEloquentQuery(): Builder
@@ -94,34 +94,34 @@ class LaboratoryResource extends Resource
             return $query->where('patient_id', PatientPortal::currentPatientId());
         }
 
-        if (ClinicalReportAccess::isDoctorUser()) {
-            return $query->where('doctor_id', ClinicalReportAccess::currentDoctorId());
-        }
-
         if (ClinicalStaffAccess::isLabStaff()) {
             return $query->where('laboratorist_id', ClinicalStaffAccess::currentLaboratoristId() ?? 0);
         }
 
-        if (ClinicalStaffAccess::isRadiologyStaff()) {
-            return $query->whereRaw('1 = 0');
+        if (PatientPortal::isPatientUser()) {
+            return $query->where('patient_id', PatientPortal::currentPatientId());
         }
 
-        return $query;
+        if (auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            return $query;
+        }
+
+        return $query->whereRaw('1 = 0');
     }
 
     public static function canCreate(): bool
     {
-        return ! PatientPortal::isPatientUser() && ! ClinicalStaffAccess::isClinicalStaff();
+        return auth()->user()?->hasAnyRole(['admin', 'super_admin']) ?? false;
     }
 
     public static function canEdit($record): bool
     {
-        return ! PatientPortal::isPatientUser() && ! ClinicalStaffAccess::isClinicalStaff();
+        return auth()->user()?->hasAnyRole(['admin', 'super_admin']) ?? false;
     }
 
     public static function canDelete($record): bool
     {
-        return ! PatientPortal::isPatientUser() && ! ClinicalStaffAccess::isClinicalStaff();
+        return auth()->user()?->hasAnyRole(['admin', 'super_admin']) ?? false;
     }
 
     public static function getPages(): array

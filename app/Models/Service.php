@@ -34,21 +34,33 @@ class Service extends Model
     
     public function calculatePatientShare(Patients $patient): float
     {
-        if (!$patient->insurance || !$this->insurance_coverage_percent) {
-            return $this->price;
-        }
-        
-        $insuranceShare = ($this->price * $this->insurance_coverage_percent) / 100;
-        return $this->price - $insuranceShare;
+        return max(0.0, round((float) $this->price - $this->calculateInsuranceShare($patient), 2));
     }
     
     public function calculateInsuranceShare(Patients $patient): float
     {
-        if (!$patient->insurance || !$this->insurance_coverage_percent) {
+        $price = max(0.0, (float) $this->price);
+        $coveragePercent = min(100.0, max(0.0, (float) $this->insurance_coverage_percent));
+
+        if ($price <= 0 || $coveragePercent <= 0) {
             return 0;
         }
-        
-        return ($this->price * $this->insurance_coverage_percent) / 100;
+
+        $policy = $patient->insurance()
+            ->where(fn ($query) => $query->whereNull('valid_from')->orWhereDate('valid_from', '<=', today()))
+            ->where(fn ($query) => $query->whereNull('valid_to')->orWhereDate('valid_to', '>=', today()))
+            ->latest('valid_from')
+            ->first();
+
+        if (! $policy) {
+            return 0;
+        }
+
+        $insuranceShare = round($price * $coveragePercent / 100, 2);
+        $copay = min($price, max(0.0, (float) $policy->co_pay));
+        $insuranceShare = min($insuranceShare, max(0.0, $price - $copay));
+
+        return min($insuranceShare, $policy->remainingCoverage());
     }
     
     // Scopes

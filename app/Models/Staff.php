@@ -11,7 +11,7 @@ class Staff extends Model
     protected static function booted(): void
     {
         static::saving(function (self $staff): void {
-            if (! in_array($staff->role, ['lab_technician', 'radiology_technician'], true)) {
+            if (! in_array($staff->role, ['lab_technician', 'radiology_technician', 'accountant', 'pharmacist'], true)) {
                 $staff->user_id = null;
             }
         });

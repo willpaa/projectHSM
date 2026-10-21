@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Beds\Schemas;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use App\Models\Nurse;
 use Filament\Schemas\Schema;
 
 class BedsForm
@@ -48,7 +49,19 @@ class BedsForm
                     ->numeric()
                     ->default(null),
                 TextInput::make('assigned_nurse')
+                    ->label('Legacy Nurse ID')
                     ->default(null),
+                Select::make('assigned_nurse_id')
+                    ->label('Responsible Nurse')
+                    ->options(fn (): array => Nurse::query()
+                        ->where('role', 'nurse')
+                        ->where('status', 'active')
+                        ->orderBy('full_name')
+                        ->pluck('full_name', 'id')
+                        ->all())
+                    ->searchable()
+                    ->preload()
+                    ->placeholder('Select a nurse'),
                 DateTimePicker::make('last_cleaned_at'),
             ]);
     }

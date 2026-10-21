@@ -9,7 +9,9 @@ class Nurse extends Model
 {
     protected $fillable = [
         'nurse_id',
+        'user_id',
         'full_name',
+        'role',
         'gender',
         'phone',
         'email',
@@ -28,5 +30,10 @@ class Nurse extends Model
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

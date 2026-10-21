@@ -16,8 +16,20 @@ class AppointmentSchedulingService
     /** @param array<string, mixed> $data */
     public function create(array $data, int $userId, bool $patientBooking = false): Appointments
     {
+        $user = auth()->user();
+        $isAdministrator = $user?->hasAnyRole(['admin', 'super_admin']) ?? false;
+        $isDoctor = ($user?->hasRole('doctor') ?? false) && ! $isAdministrator;
+
+        abort_unless(
+            $patientBooking
+                ? PatientPortal::isPatientUser()
+                : ($isDoctor || ($user?->hasAnyRole(['admin', 'super_admin', 'receptionist', 'opd_staff']) ?? false)),
+            403,
+        );
+
         return DB::transaction(function () use ($data, $userId, $patientBooking): Appointments {
-            if (auth()->user()?->hasRole('doctor')) {
+            if (auth()->user()?->hasRole('doctor')
+                && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
                 $doctorId = ClinicalReportAccess::currentDoctorId();
 
                 if ($doctorId === null) {
@@ -55,6 +67,8 @@ class AppointmentSchedulingService
     /** @param array<string, mixed> $data */
     public function update(Appointments $appointment, array $data): Appointments
     {
+        abort_unless(auth()->user()?->hasAnyRole(['admin', 'super_admin', 'receptionist', 'opd_staff']), 403);
+
         return DB::transaction(function () use ($appointment, $data): Appointments {
             $lockedAppointment = Appointments::query()
                 ->whereKey($appointment->getKey())
@@ -81,14 +95,23 @@ class AppointmentSchedulingService
 
     public function transition(Appointments $appointment, string $nextStatus): void
     {
-        $isOwnPatientCancellation = $nextStatus === 'cancelled'
-            && PatientPortal::isPatientUser()
-            && (int) $appointment->patient_id === (int) PatientPortal::currentPatientId();
-
-        abort_unless($isOwnPatientCancellation || auth()->user()?->can('Update:Appointments'), 403);
-
         DB::transaction(function () use ($appointment, $nextStatus): void {
             $lockedAppointment = Appointments::query()->whereKey($appointment->getKey())->lockForUpdate()->firstOrFail();
+            $isOwnPatientCancellation = $nextStatus === 'cancelled'
+                && PatientPortal::isPatientUser()
+                && (int) $lockedAppointment->patient_id === (int) PatientPortal::currentPatientId();
+
+            $user = auth()->user();
+            $isAdministrator = $user?->hasAnyRole(['admin', 'super_admin']) ?? false;
+            $isDoctorTransition = ($user?->hasRole('doctor') ?? false)
+                && ! $isAdministrator
+                && ClinicalReportAccess::canViewReport($lockedAppointment)
+                && in_array($nextStatus, ['checked_in', 'in_progress', 'completed'], true);
+            $isFrontDeskTransition = ($user?->hasAnyRole(['receptionist', 'opd_staff']) ?? false)
+                && in_array($nextStatus, ['scheduled', 'checked_in', 'no_show', 'cancelled'], true);
+
+            abort_unless($isOwnPatientCancellation || $isAdministrator || $isDoctorTransition || $isFrontDeskTransition, 403);
+
             $allowed = match ($lockedAppointment->status) {
                 'requested' => ['scheduled', 'cancelled'],
                 'scheduled' => ['checked_in', 'cancelled', 'no_show'],

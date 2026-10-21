@@ -16,9 +16,15 @@ class PaymentReceiptController extends Controller
             abort(403, 'Unauthorized');
         }
 
-        $payment->load(['patient', 'serviceRequest.service', 'collector']);
+        $payment->load(['patient.insurance', 'serviceRequest.service', 'collector']);
 
-        return view('receipts.payments', compact('payment'));
+        if ($payment->payment_mode === 'insurance') {
+            return view('receipts.insurance-record', compact('payment'));
+        }
+
+        $patientPaidAmount = $this->patientPaidAmount($payment);
+
+        return view('receipts.payments', compact('payment', 'patientPaidAmount'));
     }
     
     /**
@@ -28,11 +34,18 @@ class PaymentReceiptController extends Controller
     public function download(Payments $payment)
     {
         $this->authorizeReceiptAccess();
-        $payment->load(['patient', 'serviceRequest.service', 'collector']);
-        $pdf = PDF::loadView('receipts.pdf', compact('payment'));
+        $payment->load(['patient.insurance', 'serviceRequest.service', 'collector']);
+        if ($payment->payment_mode === 'insurance') {
+            $pdf = PDF::loadView('receipts.insurance-record-pdf', compact('payment'));
+        } else {
+            $patientPaidAmount = $this->patientPaidAmount($payment);
+            $pdf = PDF::loadView('receipts.pdf', compact('payment', 'patientPaidAmount'));
+        }
         $pdf->setPaper('A4', 'portrait');
         
-        return $pdf->download("receipt-{$payment->invoice_number}.pdf");
+        $prefix = $payment->payment_mode === 'insurance' ? 'insurance-record' : 'patient-receipt';
+
+        return $pdf->download("{$prefix}-{$payment->invoice_number}.pdf");
     }
     
     /**
@@ -42,11 +55,18 @@ class PaymentReceiptController extends Controller
     public function stream(Payments $payment)
     {
         $this->authorizeReceiptAccess();
-        $payment->load(['patient', 'serviceRequest.service', 'collector']);
-        $pdf = PDF::loadView('receipts.pdf', compact('payment'));
+        $payment->load(['patient.insurance', 'serviceRequest.service', 'collector']);
+        if ($payment->payment_mode === 'insurance') {
+            $pdf = PDF::loadView('receipts.insurance-record-pdf', compact('payment'));
+        } else {
+            $patientPaidAmount = $this->patientPaidAmount($payment);
+            $pdf = PDF::loadView('receipts.pdf', compact('payment', 'patientPaidAmount'));
+        }
         $pdf->setPaper('A4', 'portrait');
         
-        return $pdf->stream("receipt-{$payment->invoice_number}.pdf");
+        $prefix = $payment->payment_mode === 'insurance' ? 'insurance-record' : 'patient-receipt';
+
+        return $pdf->stream("{$prefix}-{$payment->invoice_number}.pdf");
     }
     /**
      * Send receipt via email
@@ -63,5 +83,12 @@ class PaymentReceiptController extends Controller
         if (! auth()->user()->hasAnyRole(['admin', 'super_admin', 'cashier', 'casher', 'billing_staff', 'accountant'])) {
             abort(403, 'Unauthorized');
         }
+    }
+
+    private function patientPaidAmount(Payments $payment): float
+    {
+        return (float) ($payment->serviceRequest?->payments()
+            ->where('payment_mode', '!=', 'insurance')
+            ->sum('amount') ?? $payment->amount);
     }
 }

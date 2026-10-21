@@ -660,6 +660,7 @@ class AdminPanelProvider extends PanelProvider
                         'filament.admin.resources.departments.*',
                         'filament.admin.resources.laboratories.*',
                         'filament.admin.resources.radiologies.*',
+                        'filament.admin.resources.triage-nurses.*',
                     ])),
             ])
 

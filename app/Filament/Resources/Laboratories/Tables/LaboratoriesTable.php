@@ -6,15 +6,13 @@ use App\Filament\Support\TableFilters;
 use App\Models\Laboratory;
 use App\Models\OPD;
 use App\Models\IPD;
-use App\Models\Service;
-use App\Models\ServiceRequest;
 use App\Models\User;
 use App\Support\ClinicalReportAccess;
 use App\Support\ClinicalStaffAccess;
 use App\Support\ClinicalResultNotifier;
 use App\Support\PublicStorageUrl;
 use App\Support\PatientPortal;
-use App\Support\ServiceRequestNotifier;
+use App\Support\LaboratoryHeaderActions;
 use Filament\Actions\Action;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -27,8 +25,6 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -161,93 +157,11 @@ class LaboratoriesTable
 
 
 
+            ->headerActions([
+                LaboratoryHeaderActions::sendToCashier(),
+                LaboratoryHeaderActions::resendToCashier(),
+            ])
             ->recordActions([
-                Action::make('send_to_cashier')
-                    ->label('Send to Cashier')
-                    ->icon('heroicon-o-banknotes')
-                    ->color('warning')
-                    ->visible(fn (Laboratory $record): bool => ! PatientPortal::isPatientUser() && blank($record->service_request_id) && filled($record->patient_id))
-                    ->form([
-                        Select::make('service_id')
-                            ->label('Lab Service')
-                            ->options(fn (): array => Service::query()
-                                ->where('service_type', 'lab')
-                                ->where('is_active', true)
-                                ->orderBy('name')
-                                ->pluck('name', 'id')
-                                ->all())
-                            ->searchable()
-                            ->preload()
-                            ->required(),
-                    ])
-                    ->action(function (Laboratory $record, array $data): void {
-                        $service = Service::find($data['service_id']);
-
-                        if (! $service) {
-                            Notification::make()
-                                ->title('Selected lab service was not found.')
-                                ->danger()
-                                ->send();
-
-                            return;
-                        }
-
-                        $serviceRequest = ServiceRequest::create([
-                            'request_number' => 'SR-' . now()->format('YmdHis') . '-' . Str::upper(Str::random(4)),
-                            'patient_id' => $record->patient_id,
-                            'encounter_type' => $record->encounter_type,
-                            'encounter_id' => $record->encounter_id,
-                            'service_id' => $service->id,
-                            'requested_by' => Auth::id(),
-                            'payment_status' => 'pending',
-                            'fulfillment_status' => 'requested',
-                            'total_amount' => $service->price,
-                            'patient_share' => $service->calculatePatientShare($record->patient),
-                            'insurance_share' => $service->calculateInsuranceShare($record->patient),
-                            'discount' => 0,
-                            'paid_amount' => 0,
-                            'requested_at' => now(),
-                            'notes' => 'Laboratory request. Patient must clear payment before sample processing.',
-                        ]);
-
-                        $record->update([
-                            'service_request_id' => $serviceRequest->id,
-                            'cost' => $service->price,
-                            'status' => 'ordered',
-                        ]);
-
-                        Notification::make()
-                            ->title('Patient sent to cashier.')
-                            ->body("Request: {$serviceRequest->request_number}")
-                            ->success()
-                            ->send();
-                    }),
-                Action::make('cashier_request_status')
-                    ->label(fn (Laboratory $record): string => $record->serviceRequest?->payment_status === 'paid'
-                        ? 'Payment Completed'
-                        : 'Resend to Cashier')
-                    ->icon(fn (Laboratory $record): string => $record->serviceRequest?->payment_status === 'paid'
-                        ? 'heroicon-o-check-circle'
-                        : 'heroicon-o-arrow-path')
-                    ->color(fn (Laboratory $record): string => $record->serviceRequest?->payment_status === 'paid'
-                        ? 'success'
-                        : 'warning')
-                    ->visible(fn (Laboratory $record): bool => ! PatientPortal::isPatientUser() && filled($record->service_request_id))
-                    ->disabled(fn (Laboratory $record): bool => $record->serviceRequest?->payment_status === 'paid')
-                    ->action(function (Laboratory $record): void {
-                        if ($record->serviceRequest?->payment_status === 'paid') {
-                            return;
-                        }
-
-                        ServiceRequestNotifier::notifyCashiers($record->serviceRequest);
-
-                        Notification::make()
-                            ->title('Cashier notification sent again.')
-                            ->body("Request: {$record->serviceRequest->request_number}")
-                            ->success()
-                            ->send();
-                    })
-                    ->tooltip('Resends the existing cashier request without creating a duplicate.'),
                 Action::make('record_results')
                     ->label('Record Results')
                     ->icon('heroicon-o-pencil-square')

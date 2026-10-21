@@ -59,6 +59,24 @@ class PatientsResource extends Resource
         return PatientPortal::isPatientUser() ? 'my profile' : 'patients';
     }
 
+    public static function canViewAny(): bool
+    {
+        if (PatientPortal::isPatientUser()) {
+            return true;
+        }
+
+        return auth()->user()?->hasAnyRole(['admin', 'super_admin', 'receptionist']) ?? false;
+    }
+
+    public static function canView($record): bool
+    {
+        if (PatientPortal::isPatientUser()) {
+            return (int) $record->getKey() === (int) PatientPortal::currentPatientId();
+        }
+
+        return auth()->user()?->hasAnyRole(['admin', 'super_admin', 'receptionist']) ?? false;
+    }
+
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
@@ -67,12 +85,23 @@ class PatientsResource extends Resource
             return $query->whereKey(PatientPortal::currentPatientId());
         }
 
-        return $query;
+        if (auth()->user()?->hasAnyRole(['admin', 'super_admin', 'receptionist'])) {
+            return $query;
+        }
+
+        return $query->whereRaw('1 = 0');
     }
 
     public static function canCreate(): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return ! PatientPortal::isPatientUser()
+            && (auth()->user()?->hasAnyRole(['admin', 'super_admin', 'receptionist']) ?? false);
+    }
+
+    public static function canEdit($record): bool
+    {
+        return ! PatientPortal::isPatientUser()
+            && (auth()->user()?->hasAnyRole(['admin', 'super_admin', 'receptionist']) ?? false);
     }
 
     public static function canDelete($record): bool

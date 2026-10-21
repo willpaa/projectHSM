@@ -18,6 +18,7 @@ class Beds extends Model
         'occupancy_status',
         'current_patient_id',
         'assigned_nurse',
+        'assigned_nurse_id',
         'last_cleaned_at',
     ];
 
@@ -34,6 +35,11 @@ class Beds extends Model
     public function nurse(): BelongsTo
     {
         return $this->belongsTo(Staff::class, 'assigned_nurse', 'staff_id');
+    }
+
+    public function assignedNurseProfile(): BelongsTo
+    {
+        return $this->belongsTo(Nurse::class, 'assigned_nurse_id');
     }
 
     public function opdAdmissions(): HasMany

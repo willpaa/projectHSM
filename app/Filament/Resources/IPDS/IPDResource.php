@@ -12,6 +12,7 @@ use App\Filament\Resources\IPDS\Tables\IPDSTable;
 use App\Models\IPD;
 use App\Support\ClinicalReportAccess;
 use App\Support\PatientPortal;
+use App\Support\ClinicalNurseAccess;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -68,6 +69,15 @@ class IPDResource extends Resource
             return $doctorId ? $query->where('doctor_id', $doctorId) : $query->whereRaw('1 = 0');
         }
 
+        if (ClinicalNurseAccess::isNurse()
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            $nurseId = ClinicalNurseAccess::currentNurseId('nurse');
+
+            return $nurseId
+                ? $query->whereHas('bed', fn (Builder $bedQuery) => $bedQuery->where('assigned_nurse_id', $nurseId))
+                : $query->whereRaw('1 = 0');
+        }
+
         return $query;
     }
 
@@ -86,6 +96,11 @@ class IPDResource extends Resource
         if (auth()->user()?->hasRole('doctor')
             && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
             return $record instanceof IPD && ClinicalReportAccess::canViewReport($record);
+        }
+
+        if (ClinicalNurseAccess::isNurse()
+            && ! auth()->user()?->hasAnyRole(['admin', 'super_admin'])) {
+            return false;
         }
 
         return true;

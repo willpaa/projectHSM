@@ -91,20 +91,20 @@ Artisan::command('workflow:setup-roles', function () {
     $rolesPermissions = [
         'triage_nurse' => [
             'View:Dashboard',
-            'ViewAny:Appointments',
-            'View:Appointments',
-            'Create:Appointments',
-            'Update:Appointments',
             'ViewAny:Triage',
             'View:Triage',
             'Create:Triage',
             'Update:Triage',
-            'Create:Laboratory',
-            'Create:Radiology',
             'ViewAny:Patients',
             'View:Patients',
             'ViewAny:OPD',
+            'View:OPD',
             'Create:OPD',
+        ],
+        'nurse' => [
+            'View:Dashboard',
+            'ViewAny:IPD',
+            'View:IPD',
         ],
         'opd_staff' => [
             'View:Dashboard',
@@ -207,13 +207,13 @@ Artisan::command('workflow:setup-roles', function () {
         $role = Role::query()->where('name', $roleName)->where('guard_name', 'web')->first();
 
         if ($role) {
-            $role->givePermissionTo($appointmentPermissions);
+            $role->revokePermissionTo($appointmentPermissions);
         }
     }
 
     app(PermissionRegistrar::class)->forgetCachedPermissions();
     $this->info('Workflow roles setup completed.');
-})->purpose('Create/update triage_nurse, opd_staff, lab_technician, radiology_technician, doctor, and pharmacist roles for workflow.');
+})->purpose('Create/update nurse, triage_nurse, opd_staff, lab_technician, radiology_technician, doctor, and pharmacist roles for workflow.');
 
 Artisan::command('workflow:assign-role {role} {--user_id=} {--user_email=}', function (string $role) {
     $userId = $this->option('user_id');

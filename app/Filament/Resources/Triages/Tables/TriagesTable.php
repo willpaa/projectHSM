@@ -11,6 +11,7 @@ use App\Models\IPD;
 use App\Models\Radiology;
 use App\Models\Triage;
 use App\Models\User;
+use App\Support\ClinicalNurseAccess;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\BulkActionGroup;
@@ -23,6 +24,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 
 class TriagesTable
@@ -52,6 +54,9 @@ class TriagesTable
                 TextColumn::make('chief_complaint')
                     ->searchable()
                     ->limit(30),
+                TextColumn::make('blood_pressure')->label('BP')->toggleable(),
+                TextColumn::make('pulse_rate')->label('Pulse')->toggleable(),
+                TextColumn::make('oxygen_saturation')->label('SpO₂')->toggleable(),
                 TextColumn::make('nurse.full_name')
                     ->label('Nurse')
                     ->searchable(),
@@ -79,13 +84,52 @@ class TriagesTable
                 TableFilters::createdAt(),
             ], layout: FiltersLayout::AboveContentCollapsible)
             ->recordActions([
-                
-            
+                Action::make('claim')
+                    ->label('Take Case')
+                    ->icon('heroicon-o-hand-raised')
+                    ->color('primary')
+                    ->visible(fn (Triage $record): bool => ClinicalNurseAccess::isTriageNurse()
+                        && $record->nurse_id === null
+                        && in_array($record->status, ['waiting', 'in_progress'], true))
+                    ->action(function (Triage $record): void {
+                        $nurseId = ClinicalNurseAccess::currentNurseId('triage_nurse');
+
+                        if ($nurseId === null) {
+                            Notification::make()
+                                ->title('Your account is not linked to a Triage Nurse profile.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        $claimed = DB::transaction(function () use ($record, $nurseId): bool {
+                            $triage = Triage::query()->lockForUpdate()->find($record->id);
+
+                            if (! $triage || $triage->nurse_id !== null
+                                || ! in_array($triage->status, ['waiting', 'in_progress'], true)) {
+                                return false;
+                            }
+
+                            $triage->update([
+                                'nurse_id' => $nurseId,
+                                'status' => 'in_progress',
+                            ]);
+
+                            return true;
+                        });
+
+                        Notification::make()
+                            ->title($claimed ? 'Triage case assigned to you.' : 'Another triage nurse already took this case.')
+                            ->status($claimed ? 'success' : 'warning')
+                            ->send();
+                    }),
                 Action::make('send_to_opd')
                     ->label('Send to OPD')
                     ->icon('heroicon-o-arrow-right-circle')
                     ->color('warning')
-                    ->visible(fn (Triage $record): bool => !in_array($record->status, ['completed', 'sent_to_opd']))
+                    ->visible(fn (Triage $record): bool => in_array($record->status, ['waiting', 'in_progress'], true)
+                        && ClinicalNurseAccess::canAccessTriage($record))
                     ->form([
                         Select::make('doctor_id')
                             ->label('Doctor')
@@ -124,7 +168,7 @@ class TriagesTable
                         ]);
 
                         $record->update([
-                            'status' => 'completed',
+                            'status' => 'sent_to_opd',
                             'encounter_id' => $encounterId,
                         ]);
 
@@ -171,7 +215,8 @@ class TriagesTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn (): bool => auth()->user()?->hasAnyRole(['admin', 'super_admin']) ?? false),
                 ]),
             ]);
     }

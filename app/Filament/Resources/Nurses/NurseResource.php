@@ -26,7 +26,7 @@ class NurseResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return NurseForm::configure($schema);
+        return NurseForm::configure($schema, 'nurse');
     }
 
     public static function infolist(Schema $schema): Schema
@@ -36,7 +36,12 @@ class NurseResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return NursesTable::configure($table);
+        return NursesTable::configure($table, 'nurse');
+    }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()->with(['user', 'department'])->where('role', 'nurse');
     }
 
     public static function getRelations(): array

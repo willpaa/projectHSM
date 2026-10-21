@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Users\Pages;
 use App\Filament\Resources\Users\UserResource;
 use Filament\Resources\Pages\CreateRecord;
 use App\Mail\WelcomeUserMail;
+use App\Services\StaffProfileSynchronizer;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
@@ -42,6 +43,8 @@ class CreateUser extends CreateRecord
     {
         $this->record->email_verified_at = now();
         $this->record->save();
+
+        app(StaffProfileSynchronizer::class)->sync($this->record);
 
         try {
             Mail::to($this->record->email)->send(

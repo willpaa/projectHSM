@@ -62,17 +62,38 @@ class InsuranceResource extends Resource
 
     public static function canCreate(): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return static::canManageInsurance();
     }
 
     public static function canEdit($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return static::canManageInsurance();
     }
 
     public static function canDelete($record): bool
     {
-        return ! PatientPortal::isPatientUser();
+        return static::canManageInsurance();
+    }
+
+    public static function canViewAny(): bool
+    {
+        return PatientPortal::isPatientUser() || static::canManageInsurance();
+    }
+
+    public static function canView($record): bool
+    {
+        if (PatientPortal::isPatientUser()) {
+            return (int) $record->patient_id === (int) PatientPortal::currentPatientId();
+        }
+
+        return static::canManageInsurance();
+    }
+
+    private static function canManageInsurance(): bool
+    {
+        return auth()->user()?->hasAnyRole([
+            'admin', 'super_admin', 'cashier', 'casher', 'billing_staff', 'accountant', 'finance_staff',
+        ]) ?? false;
     }
 
     public static function getPages(): array

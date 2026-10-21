@@ -30,7 +30,7 @@ class Appointments extends Model
         });
 
         static::updated(function (self $appointment): void {
-            if (! $appointment->wasChanged(['status', 'date', 'time', 'doctor_id', 'reason', 'notes'])) {
+            if (! $appointment->wasChanged(['status', 'date', 'time', 'duration_minutes', 'doctor_id', 'reason', 'notes'])) {
                 return;
             }
 
@@ -42,6 +42,7 @@ class Appointments extends Model
                     'Status: ' . $appointment->status,
                     'Date: ' . $appointment->date?->toDateString(),
                     'Time: ' . $appointment->time,
+                    'Duration: ' . $appointment->duration_minutes . ' minutes',
                     filled($appointment->reason) ? 'Reason: ' . $appointment->reason : null,
                     filled($appointment->notes) ? 'Notes: ' . $appointment->notes : null,
                 ])),

@@ -171,13 +171,13 @@ class PaymentsTable
             ])
             ->recordActions([
                 Action::make('receipt')
-                    ->label('Receipt')
+                    ->label(fn (Payments $record): string => $record->payment_mode === 'insurance' ? 'Insurance Record' : 'Patient Receipt')
                     ->icon('heroicon-o-printer')
                     ->color('success')
                     ->url(fn (Payments $record): string => route('receipts.payments.show', $record))
                     ->openUrlInNewTab(),
                 Action::make('download_receipt')
-                    ->label('PDF')
+                    ->label(fn (Payments $record): string => $record->payment_mode === 'insurance' ? 'Claim PDF' : 'Receipt PDF')
                     ->icon('heroicon-o-document-arrow-down')
                     ->url(fn (Payments $record): string => route('payments.receipts.download', $record))
                     ->openUrlInNewTab(),
